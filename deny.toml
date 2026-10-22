@@ -1,0 +1,63 @@
+# cargo-deny-configuratie voor symlog (T1, zie task.md en BOUWCONTEXT.local.md).
+# symlog is een standalone, lokale leesmachine: geen netwerk, geen daemon, geen telemetrie.
+# Deze policy geldt voor de hele geplande crate-lijst uit blueprint.md, ook vóór een
+# crate daadwerkelijk als dependency is toegevoegd.
+
+[graph]
+all-features = false
+no-default-features = false
+
+[output]
+feature-depth = 1
+
+[advisories]
+# Geen crate in deze repo gebruikt vandaag `dirs`; mocht een latere taak (config.rs)
+# toch voor `dirs` kiezen in plaats van `directories`/`etcetera`, dan hoort hier een
+# gemotiveerde ignore-regel voor RUSTSEC-2020-0053 bij, niet een stille uitzondering.
+ignore = []
+
+[licenses]
+confidence-threshold = 0.8
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "CC0-1.0",
+    "Unlicense",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+]
+
+[licenses.private]
+ignore = false
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+workspace-default-features = "allow"
+external-default-features = "allow"
+allow-workspace = true
+deny = [
+    # Netwerk-crates: symlog leest alleen lokale bestanden/stdin, nooit het netwerk op
+    # (task.md T1 "Klaar als": `cargo tree -e normal` bevat geen netwerk-crate).
+    { crate = "reqwest", reason = "symlog doet geen netwerkverkeer" },
+    { crate = "hyper", reason = "symlog doet geen netwerkverkeer" },
+    { crate = "ureq", reason = "symlog doet geen netwerkverkeer" },
+    # Ondergrenzen uit de taakbrief; oudere versies missen opgeloste problemen.
+    { name = "lru", version = "<0.18.2", reason = "ondergrens uit task.md T1" },
+    { name = "memmap2", version = "<0.9.11", reason = "ondergrens uit task.md T1" },
+    { name = "anyhow", version = "<1.0.103", reason = "ondergrens uit task.md T1" },
+]
+
+[[bans.features]]
+crate = "tokio"
+deny = ["net"]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

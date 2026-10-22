@@ -1,0 +1,23 @@
+[package]
+name = "symlog"
+version = "0.1.0"
+edition = "2021"
+# Een stabiele basislijn met ruim een jaar aan patches erachter; geen afhankelijkheid
+# vereist vandaag iets nieuwers. Wordt opnieuw bekeken zodra een latere taak een crate
+# toevoegt die een hogere MSRV eist.
+rust-version = "1.82"
+license = "MIT OR Apache-2.0"
+description = "Terminal-logviewer voor Symfony/Monolog-logs, met vim-toetsen."
+publish = false
+
+[lib]
+name = "symlog"
+path = "src/lib.rs"
+
+[[bin]]
+name = "symlog"
+path = "src/main.rs"
+
+[dependencies]
+
+[dev-dependencies]
