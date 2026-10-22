@@ -2,10 +2,11 @@
 name = "symlog"
 version = "0.1.0"
 edition = "2021"
-# Een stabiele basislijn met ruim een jaar aan patches erachter; geen afhankelijkheid
-# vereist vandaag iets nieuwers. Wordt opnieuw bekeken zodra een latere taak een crate
-# toevoegt die een hogere MSRV eist.
-rust-version = "1.82"
+# Opgehoogd in T2: `lru` vanaf de ondergrens die deny.toml eist (>=0.18.2, zie T1)
+# vereist zelf rustc 1.85.0. Dit is precies het moment dat de T1-notitie
+# ("wordt opnieuw bekeken zodra een latere taak een crate toevoegt die een hogere
+# MSRV eist") bedoelde.
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 description = "Terminal-logviewer voor Symfony/Monolog-logs, met vim-toetsen."
 publish = false
@@ -19,5 +20,15 @@ name = "symlog"
 path = "src/main.rs"
 
 [dependencies]
+lru = "0.19.0"
+memchr = "2.8.3"
+memmap2 = { version = "0.9.12", optional = true }
 
 [dev-dependencies]
+tempfile = "3.27.0"
+
+[features]
+# mmap: snelle scan via memory-mapping, standaard uit. Afkappen van het bestand
+# tijdens een actieve mmap kan SIGBUS geven (zie blueprint.md, T10); het standaardpad
+# in T2 is daarom pread/seek, niet mmap.
+mmap = ["dep:memmap2"]

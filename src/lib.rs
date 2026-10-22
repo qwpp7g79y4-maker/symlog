@@ -1,10 +1,13 @@
 //! symlog: terminal-logviewer voor Symfony/Monolog-logs (read-only, geen netwerk).
 //!
-//! Dit is het repo-skelet uit taak T1 van `task.md`. De modules uit `blueprint.md`
-//! (reader, parse, filter, tui, editor, follow) volgen in latere taken.
+//! T1 legde het repo-skelet vast. T2 voegt de eerste echte module toe: [`reader`]
+//! (offset-index en lazy records, zie `blueprint.md`). Parsing, filters, TUI, editor
+//! en follow volgen in latere taken.
 
-/// Placeholder tot T2 het echte leeswerk toevoegt; bestaat zodat de crate een lib-test
-/// heeft om CI tegen te draaien.
+pub mod reader;
+
+/// Placeholder tot er een CLI-laag is die dit toont; bestaat zodat de crate een
+/// lib-test heeft om CI tegen te draaien (T1).
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }

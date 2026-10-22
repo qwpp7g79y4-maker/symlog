@@ -1,6 +1,7 @@
 # Crates: read-only check
 
-> Bij task.md T1. Bijgehouden per taak; een crate komt pas in `Cargo.toml` na deze check.
+> Methodiek vastgelegd bij task.md T1. Bijgehouden per taak; een crate komt pas in
+> `Cargo.toml` na deze check.
 
 ## Methodiek
 
@@ -20,24 +21,25 @@ Dit document legt per crate uit de geplande lijst (`blueprint.md`, sectie
 
 ## Status per crate
 
-| Crate | Module | Status in T1 | Opmerking |
+| Crate | Module | Status | Opmerking |
 |---|---|---|---|
 | `ratatui` | tui | gepland, nog geen dependency | MIT, geen netwerk, komt in T8 |
 | `crossterm` | tui | gepland, nog geen dependency | MIT, geen netwerk, komt in T8 |
 | `clap` (derive) | main | gepland, nog geen dependency | MIT OR Apache-2.0, komt met de echte CLI-parser |
-| `memchr` | reader::index | gepland, nog geen dependency | MIT OR Apache-2.0, komt in T2 |
+| `memchr` | reader::index | toegevoegd in T2 | MIT OR Apache-2.0 |
 | `serde`, `serde_json` | parse::json, model | gepland, nog geen dependency | MIT OR Apache-2.0, komt in T5 |
 | `regex` | filter | gepland, nog geen dependency | MIT OR Apache-2.0, lineaire tijd (geen backtracking-DoS), komt in T7 |
 | `jiff` | time | gepland, nog geen dependency | MIT OR Apache-2.0; voorkeur boven `time`+`chrono-tz` is vastgelegd (task.md open punt 3), komt in T7 |
 | `unicode-width`, `unicode-segmentation` | tui::width | gepland, nog geen dependency | MIT OR Apache-2.0, komt in T8 |
 | `notify` | follow | gepland, nog geen dependency | MIT OR Apache-2.0/CC0-1.0 (meerdere sub-crates), komt in T10; alleen lokale FS-events, geen netwerk |
-| `lru` | reader::cache | gepland, nog geen dependency | MIT OR Apache-2.0; ondergrens `>=0.18.2` in `deny.toml`, komt in T2 |
+| `lru` | reader::cache | toegevoegd in T2 (v0.19.0) | MIT; ondergrens `>=0.18.2` in `deny.toml`. Die ondergrens vereist rustc 1.85.0, dus `rust-version` in `Cargo.toml` ging in T2 van 1.82 naar 1.85 |
 | `shell-words` | editor::fallback | gepland, nog geen dependency | MIT OR Apache-2.0, komt in T9 |
 | `toml` | config | gepland, nog geen dependency | MIT OR Apache-2.0, komt met config-laden |
 | `anyhow` (bin) | main | gepland, nog geen dependency | MIT OR Apache-2.0; ondergrens `>=1.0.103` in `deny.toml` |
 | `thiserror` (lib) | reader/parse/editor | gepland, nog geen dependency | MIT OR Apache-2.0 |
-| `memmap2` (feature `mmap`, standaard uit) | reader | gepland, nog geen dependency | MIT OR Apache-2.0; ondergrens `>=0.9.11` in `deny.toml`; blijft achter een feature-vlag, zie T2 en blueprint ("mmap standaard uit") |
-| dev: `insta`, `assert_cmd`, `predicates`, `tempfile`, `proptest` | tests | gepland, nog geen dependency | alle MIT OR Apache-2.0, dev-only, niet in het release-pad |
+| `memmap2` (feature `mmap`, standaard uit) | reader | toegevoegd in T2 als optionele dependency (v0.9.12); niet standaard aan | MIT OR Apache-2.0; ondergrens `>=0.9.11` in `deny.toml`; feature `mmap` is gedefinieerd maar nog niet in code gebruikt (pread/seek is het standaardpad, zie blueprint "mmap standaard uit") |
+| dev: `insta`, `assert_cmd`, `predicates`, `proptest` | tests | gepland, nog geen dependency | alle MIT OR Apache-2.0, dev-only, niet in het release-pad |
+| dev: `tempfile` | tests | toegevoegd in T2 (v3.27.0) | MIT OR Apache-2.0, dev-only; gebruikt voor tijdelijke logbestanden in de reader-tests |
 
 ## Beslissing: XDG-configpad (`dirs` vs. alternatief)
 
