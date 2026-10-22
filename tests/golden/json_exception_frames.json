@@ -1,0 +1,22 @@
+[
+  {
+    "func": "",
+    "line": 88,
+    "path": "/var/www/src/Worker.php"
+  },
+  {
+    "func": "App\\Worker->run()",
+    "line": 40,
+    "path": "/var/www/src/Dispatcher.php"
+  },
+  {
+    "func": "App\\Kernel->handle()",
+    "line": null,
+    "path": null
+  },
+  {
+    "func": "{main}",
+    "line": null,
+    "path": null
+  }
+]

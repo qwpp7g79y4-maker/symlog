@@ -1,0 +1,7 @@
+[2026-01-15T13:00:00.000000+01:00] app.ERROR: Uncaught LogicException: broken state in /var/www/src/Service.php:10
+Stack trace:
+#0 /var/www/src/Service.php(10): App\Service->check()
+[previous exception] [object] (RuntimeException(code: 0): root cause at /var/www/src/Service.php(5))
+#0 /var/www/src/Service.php(5): App\Service->init()
+#1 {main} [] []
+[2026-01-15T13:00:01.000000+01:00] app.INFO: next record after the tricky heads [] []

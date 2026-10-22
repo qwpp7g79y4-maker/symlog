@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use symlog::reader::Reader;
 
 const ONE_GIB: u64 = 1024 * 1024 * 1024;
-const LAST_RECORD: &[u8] = b"LAST-RECORD-MARKER\n";
+const LAST_RECORD: &[u8] = b"[2026-01-15T23:59:59.000000+01:00] app.CRITICAL: LAST-RECORD-MARKER\n";
 
 #[test]
 fn jumping_to_last_record_of_1gib_file_is_fast() {
@@ -42,7 +42,13 @@ fn jumping_to_last_record_of_1gib_file_is_fast() {
 fn generate_1gib_log(path: &std::path::Path) {
     let file = File::create(path).expect("create");
     let mut writer = BufWriter::new(file);
-    let line = "x".repeat(118);
+    // Elke regel is zelf een geldige recordkop (task.md T4: de index groepeert per
+    // record, niet per regel meer), zodat dit bestand echt uit veel records bestaat
+    // en de test hieronder de offset-index raakt in plaats van één groot record.
+    let line = format!(
+        "[2026-01-15T10:30:45.000000+01:00] app.INFO: {}",
+        "x".repeat(85)
+    );
     let line_with_newline = format!("{line}\n");
     let mut written: u64 = 0;
     while written < ONE_GIB {

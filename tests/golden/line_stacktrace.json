@@ -1,0 +1,214 @@
+[
+  {
+    "channel": "app",
+    "context": {
+      "request_id": "abc-123"
+    },
+    "datetime": "2026-01-15T12:00:00.000000+01:00",
+    "extra": [],
+    "frames": [
+      {
+        "func": "App\\Worker->runStep(0)",
+        "line": 40,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(1)",
+        "line": 41,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(2)",
+        "line": 42,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(3)",
+        "line": 43,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(4)",
+        "line": 44,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(5)",
+        "line": 45,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(6)",
+        "line": 46,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(7)",
+        "line": 47,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(8)",
+        "line": 48,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(9)",
+        "line": 49,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(10)",
+        "line": 50,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(11)",
+        "line": 51,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(12)",
+        "line": 52,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(13)",
+        "line": 53,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(14)",
+        "line": 54,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(15)",
+        "line": 55,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(16)",
+        "line": 56,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(17)",
+        "line": 57,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(18)",
+        "line": 58,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(19)",
+        "line": 59,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(20)",
+        "line": 60,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(21)",
+        "line": 61,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(22)",
+        "line": 62,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(23)",
+        "line": 63,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(24)",
+        "line": 64,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(25)",
+        "line": 65,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(26)",
+        "line": 66,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(27)",
+        "line": 67,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(28)",
+        "line": 68,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(29)",
+        "line": 69,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(30)",
+        "line": 70,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(31)",
+        "line": 71,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(32)",
+        "line": 72,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(33)",
+        "line": 73,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Worker->runStep(34)",
+        "line": 74,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "App\\Kernel->handle()",
+        "line": null,
+        "path": null
+      },
+      {
+        "func": "App\\Kernel->boot()",
+        "line": 20,
+        "path": "/var/www/public/index.php"
+      },
+      {
+        "func": "{main}",
+        "line": null,
+        "path": null
+      },
+      {
+        "func": "App\\Worker->validate()",
+        "line": 52,
+        "path": "/var/www/src/Worker.php"
+      },
+      {
+        "func": "{main}",
+        "line": null,
+        "path": null
+      }
+    ],
+    "level": "CRITICAL",
+    "message": "Uncaught RuntimeException: boom in /var/www/src/Worker.php:88\nStack trace:\n#0 /var/www/src/Dispatcher.php(40): App\\Worker->runStep(0)\n#1 /var/www/src/Dispatcher.php(41): App\\Worker->runStep(1)\n#2 /var/www/src/Dispatcher.php(42): App\\Worker->runStep(2)\n#3 /var/www/src/Dispatcher.php(43): App\\Worker->runStep(3)\n#4 /var/www/src/Dispatcher.php(44): App\\Worker->runStep(4)\n#5 /var/www/src/Dispatcher.php(45): App\\Worker->runStep(5)\n#6 /var/www/src/Dispatcher.php(46): App\\Worker->runStep(6)\n#7 /var/www/src/Dispatcher.php(47): App\\Worker->runStep(7)\n#8 /var/www/src/Dispatcher.php(48): App\\Worker->runStep(8)\n#9 /var/www/src/Dispatcher.php(49): App\\Worker->runStep(9)\n#10 /var/www/src/Dispatcher.php(50): App\\Worker->runStep(10)\n#11 /var/www/src/Dispatcher.php(51): App\\Worker->runStep(11)\n#12 /var/www/src/Dispatcher.php(52): App\\Worker->runStep(12)\n#13 /var/www/src/Dispatcher.php(53): App\\Worker->runStep(13)\n#14 /var/www/src/Dispatcher.php(54): App\\Worker->runStep(14)\n#15 /var/www/src/Dispatcher.php(55): App\\Worker->runStep(15)\n#16 /var/www/src/Dispatcher.php(56): App\\Worker->runStep(16)\n#17 /var/www/src/Dispatcher.php(57): App\\Worker->runStep(17)\n#18 /var/www/src/Dispatcher.php(58): App\\Worker->runStep(18)\n#19 /var/www/src/Dispatcher.php(59): App\\Worker->runStep(19)\n#20 /var/www/src/Dispatcher.php(60): App\\Worker->runStep(20)\n#21 /var/www/src/Dispatcher.php(61): App\\Worker->runStep(21)\n#22 /var/www/src/Dispatcher.php(62): App\\Worker->runStep(22)\n#23 /var/www/src/Dispatcher.php(63): App\\Worker->runStep(23)\n#24 /var/www/src/Dispatcher.php(64): App\\Worker->runStep(24)\n#25 /var/www/src/Dispatcher.php(65): App\\Worker->runStep(25)\n#26 /var/www/src/Dispatcher.php(66): App\\Worker->runStep(26)\n#27 /var/www/src/Dispatcher.php(67): App\\Worker->runStep(27)\n#28 /var/www/src/Dispatcher.php(68): App\\Worker->runStep(28)\n#29 /var/www/src/Dispatcher.php(69): App\\Worker->runStep(29)\n#30 /var/www/src/Dispatcher.php(70): App\\Worker->runStep(30)\n#31 /var/www/src/Dispatcher.php(71): App\\Worker->runStep(31)\n#32 /var/www/src/Dispatcher.php(72): App\\Worker->runStep(32)\n#33 /var/www/src/Dispatcher.php(73): App\\Worker->runStep(33)\n#34 /var/www/src/Dispatcher.php(74): App\\Worker->runStep(34)\n#35 [internal function]: App\\Kernel->handle()\n#36 /var/www/public/index.php(20): App\\Kernel->boot()\n#37 {main}\n[previous exception] [object] (LogicException(code: 0): root cause at /var/www/src/Worker.php(52))\n#0 /var/www/src/Worker.php(52): App\\Worker->validate()\n#1 {main}"
+  }
+]

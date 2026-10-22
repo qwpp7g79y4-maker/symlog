@@ -146,25 +146,40 @@ mod tests {
 
     #[test]
     fn opens_read_only_and_indexes_records() {
-        let (_dir, path) = write_temp_log(b"a\nbb\nccc\n");
+        let (_dir, path) = write_temp_log(
+            b"[2026-01-01 00:00:00] a.INFO: one\n\
+              [2026-01-01 00:00:01] a.INFO: two\n\
+              [2026-01-01 00:00:02] a.INFO: three\n",
+        );
         let mut reader = Reader::open(&path).expect("open");
         reader.wait_until_indexed().expect("index");
 
         assert_eq!(reader.record_count(), 3);
-        assert_eq!(&*reader.record_bytes(0).unwrap().unwrap(), b"a\n");
-        assert_eq!(&*reader.record_bytes(1).unwrap().unwrap(), b"bb\n");
-        assert_eq!(&*reader.record_bytes(2).unwrap().unwrap(), b"ccc\n");
+        assert_eq!(
+            &*reader.record_bytes(0).unwrap().unwrap(),
+            b"[2026-01-01 00:00:00] a.INFO: one\n"
+        );
+        assert_eq!(
+            &*reader.record_bytes(1).unwrap().unwrap(),
+            b"[2026-01-01 00:00:01] a.INFO: two\n"
+        );
+        assert_eq!(
+            &*reader.record_bytes(2).unwrap().unwrap(),
+            b"[2026-01-01 00:00:02] a.INFO: three\n"
+        );
         assert!(reader.record_bytes(3).unwrap().is_none());
     }
 
     #[test]
     fn last_record_without_trailing_newline() {
-        let (_dir, path) = write_temp_log(b"first\nsecond");
+        let (_dir, path) = write_temp_log(
+            b"[2026-01-01 00:00:00] a.INFO: first\n[2026-01-01 00:00:01] a.INFO: second",
+        );
         let mut reader = Reader::open(&path).expect("open");
         reader.wait_until_indexed().expect("index");
 
         let last = reader.last_record_bytes().expect("read").expect("some");
-        assert_eq!(&*last, b"second");
+        assert_eq!(&*last, b"[2026-01-01 00:00:01] a.INFO: second");
     }
 
     #[test]
@@ -179,7 +194,7 @@ mod tests {
 
     #[test]
     fn repeated_reads_come_from_cache() {
-        let (_dir, path) = write_temp_log(b"only-record\n");
+        let (_dir, path) = write_temp_log(b"[2026-01-01 00:00:00] a.INFO: only record\n");
         let mut reader = Reader::open(&path).expect("open");
         reader.wait_until_indexed().expect("index");
 
@@ -187,5 +202,27 @@ mod tests {
         let second = reader.record_bytes(0).unwrap().unwrap();
         // Zelfde Arc-allocatie: de tweede lezing kwam uit de cache, niet van schijf.
         assert!(Arc::ptr_eq(&first, &second));
+    }
+
+    #[test]
+    fn multiline_record_is_read_as_a_single_record() {
+        // Task.md T4: een stacktrace-vervolgregel hoort bij het voorgaande record, de
+        // index mag er geen nieuw record op openen.
+        let (_dir, path) = write_temp_log(
+            b"[2026-01-01 00:00:00] a.ERROR: boom\nStack trace:\n#0 {main}\n\
+              [2026-01-01 00:00:01] a.INFO: next\n",
+        );
+        let mut reader = Reader::open(&path).expect("open");
+        reader.wait_until_indexed().expect("index");
+
+        assert_eq!(reader.record_count(), 2);
+        assert_eq!(
+            &*reader.record_bytes(0).unwrap().unwrap(),
+            b"[2026-01-01 00:00:00] a.ERROR: boom\nStack trace:\n#0 {main}\n"
+        );
+        assert_eq!(
+            &*reader.record_bytes(1).unwrap().unwrap(),
+            b"[2026-01-01 00:00:01] a.INFO: next\n"
+        );
     }
 }

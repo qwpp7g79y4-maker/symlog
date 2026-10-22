@@ -1,27 +1,39 @@
-//! Monolog LineFormatter-parser (task.md T3; blueprint.md `parse::line`).
+//! Monolog LineFormatter-parser (task.md T3/T4; blueprint.md `parse::line`).
 //!
 //! Standaardformaat: `[%datetime%] %channel%.%level_name%: %message% %context%
-//! %extra%`. `context` en `extra` zijn JSON (`{...}` of `[]`) aan het eind van de
-//! regel; de grens met `message` wordt van achteren gevonden via een gebalanceerde
+//! %extra%`. `context` en `extra` zijn JSON (`{...}` of `[]`) aan het eind van het
+//! record; de grens met `message` wordt van achteren gevonden via een gebalanceerde
 //! JSON-scan ([`rfind_json_blob`]), zodat een `{` of `]` in de message zelf de
 //! grensbepaling niet verstoort: de scan stopt zodra de buitenste haak van het
 //! *laatste* blok sluit en gaat niet verder naar links.
+//!
+//! Een record kan meerdere fysieke regels beslaan (task.md T4): `%message%` is een
+//! kale stringvervanging in Monolog (niet JSON-ge-escaped), dus een bericht dat zelf
+//! `\n` bevat (bijvoorbeeld PHP's eigen `Stack trace:`-tekst bij een ongevangen
+//! exception) komt ongewijzigd in de log terecht. [`parse_line`] accepteert daarom een
+//! heel recordblok (header-regel plus eventuele vervolgregels); de grensbepaling van
+//! `%context%`/`%extra%` werkt ongewijzigd, want [`rfind_json_blob`] scant simpelweg
+//! vanaf het einde van de tekst en behandelt `\n` als een gewoon teken. [`split_records`]
+//! splitst de inhoud van een heel bestand in zulke blokken; de echte reader
+//! ([`crate::reader::index`]) doet hetzelfde maar dan streaming op bytes.
 //!
 //! Een regel die niet aan dit standaardformaat voldoet (bijvoorbeeld een aangepaste
 //! LineFormatter-string) levert `None` op. Task.md T3 "Blijft": zulke regels vallen
 //! terug op "onbekend formaat"; die terugval zelf (een `Raw`-record) komt in T6.
 
 use crate::model::{Level, Record};
+use crate::parse::trace;
 
-/// Parseert één logregel in het Monolog LineFormatter-standaardformaat (Monolog 1–3).
-/// `None` als de regel niet aan dat formaat voldoet.
-pub fn parse_line(line: &str) -> Option<Record> {
-    let line = strip_line_ending(line);
+/// Parseert één logrecord (header-regel plus eventuele vervolgregels, zie de
+/// moduledoc) in het Monolog LineFormatter-standaardformaat (Monolog 1–3). `None` als
+/// de header niet aan dat formaat voldoet.
+pub fn parse_line(block: &str) -> Option<Record> {
+    let block = strip_line_ending(block);
 
-    let after_open = line.strip_prefix('[')?;
+    let after_open = block.strip_prefix('[')?;
     let close = after_open.find(']')?;
     let datetime = &after_open[..close];
-    if !looks_like_datetime(datetime) {
+    if !looks_like_datetime(datetime.as_bytes()) {
         return None;
     }
 
@@ -42,6 +54,8 @@ pub fn parse_line(line: &str) -> Option<Record> {
     let (before_context, context) = take_trailing_json(before_extra)?;
     let message = before_context.strip_suffix(' ')?;
 
+    let frames = trace::frames_from_message(message);
+
     Some(Record {
         datetime: datetime.to_string(),
         channel: channel.to_string(),
@@ -49,7 +63,51 @@ pub fn parse_line(line: &str) -> Option<Record> {
         message: message.to_string(),
         context,
         extra,
+        frames,
     })
+}
+
+/// Splitst de volledige inhoud van een LineFormatter-logbestand in afzonderlijke
+/// recordblokken (task.md T4): elke regel die met een geldige recordkop begint, opent
+/// een nieuw blok; andere regels worden aan het lopende blok toegevoegd (een
+/// stacktrace-vervolgregel, bijvoorbeeld). De eerste regel van `content` opent altijd
+/// het eerste blok, ongeacht of die een geldige kop heeft (vergelijk de
+/// achtergrondindexer, [`crate::reader::index`], die offset 0 ook altijd als
+/// recordstart publiceert).
+pub fn split_records(content: &str) -> Vec<&str> {
+    let mut starts = Vec::new();
+    let mut offset = 0usize;
+    for (i, raw_line) in content.split_inclusive('\n').enumerate() {
+        let line = strip_line_ending(raw_line);
+        if i == 0 || is_record_header(line.as_bytes()) {
+            starts.push(offset);
+        }
+        offset += raw_line.len();
+    }
+
+    let mut blocks: Vec<&str> = starts.windows(2).map(|w| &content[w[0]..w[1]]).collect();
+    if let Some(&last) = starts.last() {
+        blocks.push(&content[last..]);
+    }
+    blocks
+}
+
+/// Of `line` (zonder regeleinde) een geldige LineFormatter-recordkop is: `[` gevolgd
+/// door een herkende datetime en een sluitende `]`. Alleen het datetime-patroon wordt
+/// strikt gecontroleerd, niet channel/level/colon (blueprint.md: "Om valse starts te
+/// vermijden checkt de indexer de kop strikt (datetime-patroon), niet alleen `[`").
+/// Gedeeld door [`split_records`] en de achtergrondindexer
+/// ([`crate::reader::index::build_index`]), zodat beide dezelfde regel toepassen voor
+/// "dit is het begin van een nieuw record". Werkt op bytes (niet `&str`): de
+/// achtergrondindexer kan dit ook aanroepen met tekst die (nog) niet geldige UTF-8 is.
+pub(crate) fn is_record_header(line: &[u8]) -> bool {
+    let Some(rest) = line.strip_prefix(b"[") else {
+        return false;
+    };
+    let Some(close) = memchr::memchr(b']', rest) else {
+        return false;
+    };
+    looks_like_datetime(&rest[..close])
 }
 
 fn strip_line_ending(line: &str) -> &str {
@@ -67,8 +125,7 @@ fn is_channel_byte(b: u8) -> bool {
 /// - dezelfde vorm zonder microseconden;
 /// - Monolog 1 `Y-m-d H:i:s` (spatie in plaats van `T`, geen microseconden, geen
 ///   offset: "tijd zonder zone", blueprint.md T7).
-fn looks_like_datetime(s: &str) -> bool {
-    let b = s.as_bytes();
+fn looks_like_datetime(b: &[u8]) -> bool {
     if b.len() < 19 {
         return false;
     }

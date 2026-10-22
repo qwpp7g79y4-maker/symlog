@@ -4,6 +4,7 @@
     "context": [],
     "datetime": "2015-05-01 12:34:56",
     "extra": [],
+    "frames": [],
     "level": "INFO",
     "message": "Legacy entry without timezone info"
   },
@@ -14,6 +15,7 @@
     },
     "datetime": "2015-05-01 12:35:10",
     "extra": [],
+    "frames": [],
     "level": "ERROR",
     "message": "Legacy error entry"
   }

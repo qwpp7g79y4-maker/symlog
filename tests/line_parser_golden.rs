@@ -10,11 +10,11 @@ fn parse_fixture(name: &str) -> serde_json::Value {
         .join(name);
     let content = fs::read_to_string(&path).unwrap_or_else(|e| panic!("{path:?}: {e}"));
 
-    let records: Vec<serde_json::Value> = content
-        .lines()
-        .map(|line| {
-            symlog::parse::line::parse_line(line)
-                .unwrap_or_else(|| panic!("regel parseert niet als standaard lineformat: {line:?}"))
+    let records: Vec<serde_json::Value> = symlog::parse::line::split_records(&content)
+        .into_iter()
+        .map(|block| {
+            symlog::parse::line::parse_line(block)
+                .unwrap_or_else(|| panic!("blok parseert niet als standaard lineformat: {block:?}"))
                 .to_json()
         })
         .collect();

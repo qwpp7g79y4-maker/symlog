@@ -4,6 +4,7 @@
     "context": [],
     "datetime": "2026-01-15T10:30:45.123456+01:00",
     "extra": [],
+    "frames": [],
     "level": "DEBUG",
     "message": "User cache warmed"
   },
@@ -14,6 +15,7 @@
     },
     "datetime": "2026-01-15T10:30:46.000000+01:00",
     "extra": [],
+    "frames": [],
     "level": "INFO",
     "message": "Incoming GET /health"
   },
@@ -24,6 +26,7 @@
     },
     "datetime": "2026-01-15T10:30:47.500000+01:00",
     "extra": [],
+    "frames": [],
     "level": "NOTICE",
     "message": "Slow query detected"
   },
@@ -34,6 +37,7 @@
     },
     "datetime": "2026-01-15T10:30:48.250000+01:00",
     "extra": [],
+    "frames": [],
     "level": "WARNING",
     "message": "Failed login attempt"
   },
@@ -44,6 +48,7 @@
     },
     "datetime": "2026-01-15T10:30:49.000000+01:00",
     "extra": [],
+    "frames": [],
     "level": "ERROR",
     "message": "Undefined array key \"foo\""
   },
@@ -56,6 +61,7 @@
     "extra": {
       "memory_mb": 256
     },
+    "frames": [],
     "level": "CRITICAL",
     "message": "Command failed"
   },
@@ -66,6 +72,7 @@
     },
     "datetime": "2026-01-15T10:30:51.333333+01:00",
     "extra": [],
+    "frames": [],
     "level": "ALERT",
     "message": "Disk usage above threshold"
   },
@@ -74,6 +81,7 @@
     "context": [],
     "datetime": "2026-01-15T10:30:52.999999+01:00",
     "extra": [],
+    "frames": [],
     "level": "EMERGENCY",
     "message": "Service unreachable"
   }

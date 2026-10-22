@@ -1,0 +1,36 @@
+[
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T13:00:00.000000+01:00",
+    "extra": [],
+    "frames": [
+      {
+        "func": "App\\Service->check()",
+        "line": 10,
+        "path": "/var/www/src/Service.php"
+      },
+      {
+        "func": "App\\Service->init()",
+        "line": 5,
+        "path": "/var/www/src/Service.php"
+      },
+      {
+        "func": "{main}",
+        "line": null,
+        "path": null
+      }
+    ],
+    "level": "ERROR",
+    "message": "Uncaught LogicException: broken state in /var/www/src/Service.php:10\nStack trace:\n#0 /var/www/src/Service.php(10): App\\Service->check()\n[previous exception] [object] (RuntimeException(code: 0): root cause at /var/www/src/Service.php(5))\n#0 /var/www/src/Service.php(5): App\\Service->init()\n#1 {main}"
+  },
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T13:00:01.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "INFO",
+    "message": "next record after the tricky heads"
+  }
+]

@@ -6,6 +6,7 @@
     },
     "datetime": "2026-01-15T11:00:00.000000+01:00",
     "extra": [],
+    "frames": [],
     "level": "INFO",
     "message": "Payload was {not valid json} but handled fine"
   },
@@ -14,6 +15,7 @@
     "context": [],
     "datetime": "2026-01-15T11:00:01.000000+01:00",
     "extra": [],
+    "frames": [],
     "level": "INFO",
     "message": "Array bounds check arr[5] exceeded"
   },
@@ -37,6 +39,7 @@
     "extra": {
       "request_id": "abc-123"
     },
+    "frames": [],
     "level": "WARNING",
     "message": "Nested context example"
   }

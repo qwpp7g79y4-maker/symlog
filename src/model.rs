@@ -1,10 +1,11 @@
-//! Gedeelde datatypes voor geparste records (task.md T3; blueprint.md `model.rs`).
+//! Gedeelde datatypes voor geparste records (task.md T3/T4; blueprint.md `model.rs`).
 //!
-//! T3 legt alleen vast wat de LineFormatter-parser al kan leveren: datetime als
-//! ruwe string (de echte tijdzone-semantiek met `Zoned`/`OffsetDateTime` komt in T7),
-//! kanaal, niveau, message en context/extra als JSON. Latere taken breiden
-//! [`Record`] uit met `offset`, `frames` (T4) en `raw` (T6), en vervangen `channel`
-//! door een geïnterneerd type.
+//! T3 legde vast wat de LineFormatter-parser kan leveren: datetime als ruwe string (de
+//! echte tijdzone-semantiek met `Zoned`/`OffsetDateTime` komt in T7), kanaal, niveau,
+//! message en context/extra als JSON. T4 voegt [`Frame`] toe en breidt [`Record`] uit
+//! met `frames`: een record kan meerdere fysieke regels beslaan (stacktraces), en elk
+//! herkend stacktrace-frame wordt een `Frame`. Latere taken breiden [`Record`] verder
+//! uit met `offset` en `raw` (T6), en vervangen `channel` door een geïnterneerd type.
 //!
 //! Geen `serde::Serialize`-afleiding hier: dat zou de `derive`-feature van `serde`
 //! vereisen (en daarmee `proc-macro2`/`quote`/`syn`/`unicode-ident`, met een
@@ -79,9 +80,15 @@ pub struct Record {
     pub datetime: String,
     pub channel: String,
     pub level: Level,
+    /// Het volledige bericht, inclusief eventuele stacktrace-tekst op de regels erna
+    /// (task.md T4): een record kan meerdere fysieke regels beslaan, dus `message` kan
+    /// zelf `\n`-tekens bevatten.
     pub message: String,
     pub context: serde_json::Value,
     pub extra: serde_json::Value,
+    /// Stacktrace-frames herkend in `message` (LineFormatter) of meegegeven door de
+    /// JsonFormatter-kant (task.md T4). Leeg als er geen stacktrace is.
+    pub frames: Vec<Frame>,
 }
 
 impl Record {
@@ -95,6 +102,30 @@ impl Record {
             "message": self.message,
             "context": self.context,
             "extra": self.extra,
+            "frames": self.frames.iter().map(Frame::to_json).collect::<Vec<_>>(),
+        })
+    }
+}
+
+/// Eén frame uit een stacktrace (task.md T4; blueprint.md `parse::trace`).
+///
+/// `path`/`line` zijn `None` voor frames zonder springbare locatie: PHP's eigen
+/// `Stack trace:`-tekst schrijft zulke frames als `#N [internal function]: ...` of als
+/// `#N {main}` (task.md T4 "Blijft": zulke frames worden getoond maar zijn niet
+/// "springbaar").
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Frame {
+    pub path: Option<String>,
+    pub line: Option<u32>,
+    pub func: String,
+}
+
+impl Frame {
+    pub fn to_json(&self) -> serde_json::Value {
+        serde_json::json!({
+            "path": self.path,
+            "line": self.line,
+            "func": self.func,
         })
     }
 }
@@ -142,6 +173,18 @@ mod tests {
             message: "hallo".to_string(),
             context: serde_json::json!([]),
             extra: serde_json::json!({"k": "v"}),
+            frames: vec![
+                Frame {
+                    path: Some("/app/src/Foo.php".to_string()),
+                    line: Some(42),
+                    func: "App\\Foo->bar()".to_string(),
+                },
+                Frame {
+                    path: None,
+                    line: None,
+                    func: "{main}".to_string(),
+                },
+            ],
         };
         assert_eq!(
             record.to_json(),
@@ -152,6 +195,10 @@ mod tests {
                 "message": "hallo",
                 "context": [],
                 "extra": {"k": "v"},
+                "frames": [
+                    {"path": "/app/src/Foo.php", "line": 42, "func": "App\\Foo->bar()"},
+                    {"path": null, "line": null, "func": "{main}"},
+                ],
             })
         );
     }

@@ -1,10 +1,15 @@
 //! Offset-index: alleen record-startoffsets (u64), geen kopie van de inhoud
-//! (task.md T2, blueprint.md `reader::index`).
+//! (task.md T2/T4, blueprint.md `reader::index`).
 //!
-//! Een record begint bij offset 0 en bij elke byte direct na een `\n`. De laatste
-//! regel van een bestand dat zelf met een `\n` eindigt, levert geen extra leeg
-//! record op.
+//! Een record begint bij offset 0 en bij elke regel die een geldige recordkop is
+//! (task.md T4: `[` + herkende datetime, zie [`crate::parse::line::is_record_header`]).
+//! Andere regels zijn een vervolg van het lopende record (bijvoorbeeld een
+//! stacktrace-regel): ze leveren geen nieuwe offset op. Dit maakt een record
+//! inherent meerdere fysieke regels lang mogelijk. De laatste regel van een bestand
+//! dat zelf met een `\n` eindigt, levert nooit een extra leeg record op, want een lege
+//! regel is nooit een geldige recordkop.
 
+use crate::parse::line::is_record_header;
 use memchr::memchr_iter;
 use std::io::{self, Read};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -68,16 +73,6 @@ impl RecordIndex {
         self.bytes_scanned.store(scanned_so_far, Ordering::Release);
     }
 
-    /// Verwijdert de laatst gepubliceerde offset als die gelijk is aan `value`.
-    /// Gebruikt aan het eind van [`build_index`] om een leeg record na een
-    /// afsluitende `\n` ongedaan te maken.
-    fn drop_trailing_if(&self, value: u64) {
-        let mut offsets = self.offsets.write().expect("index-lock vergiftigd");
-        if offsets.last() == Some(&value) {
-            offsets.pop();
-        }
-    }
-
     fn mark_done(&self) {
         self.done.store(true, Ordering::Release);
     }
@@ -86,6 +81,12 @@ impl RecordIndex {
 /// Scant `reader` in blokken van `block_size` bytes en publiceert record-startoffsets
 /// in `index`. Werkt op elke `Read`-bron (bestand of, in tests, een `Cursor`), zodat
 /// de blokgrens-logica deterministisch getest kan worden.
+///
+/// Een regel kan zelf over een bloklezing heen lopen (bijvoorbeeld een lange
+/// stacktrace-regel, of de datetime-kop precies op de blokgrens); `carry` houdt de
+/// bytes van de huidige, nog niet afgesloten regel vast totdat de afsluitende `\n`
+/// (of EOF) gevonden is, zodat [`is_record_header`] altijd de volledige regel ziet en
+/// niet een toevallig stukje ervan.
 pub fn build_index<R: Read>(
     mut reader: R,
     index: &RecordIndex,
@@ -94,6 +95,8 @@ pub fn build_index<R: Read>(
     assert!(block_size > 0, "block_size moet positief zijn");
     let mut buf = vec![0u8; block_size];
     let mut pos: u64 = 0;
+    let mut line_start: u64 = 0;
+    let mut carry: Vec<u8> = Vec::new();
     let mut seen_any_byte = false;
 
     loop {
@@ -104,17 +107,35 @@ pub fn build_index<R: Read>(
         let chunk = &buf[..n];
         let mut batch = Vec::new();
         if !seen_any_byte {
-            batch.push(pos);
+            // Offset 0 is altijd een recordstart, ongeacht de inhoud (task.md T2
+            // "Blijft"); T6 toont zo'n record evt. als Raw als de kop niet klopt.
+            batch.push(0);
             seen_any_byte = true;
         }
+
+        let mut chunk_pos = 0usize;
         for nl in memchr_iter(b'\n', chunk) {
-            batch.push(pos + nl as u64 + 1);
+            carry.extend_from_slice(&chunk[chunk_pos..nl]);
+            // `line_start != 0` slaat alleen de allereerste regel over: offset 0 is al
+            // hierboven gepubliceerd en mag niet nogmaals in `batch` terechtkomen.
+            if line_start != 0 && is_record_header(&carry) {
+                batch.push(line_start);
+            }
+            line_start = pos + nl as u64 + 1;
+            carry.clear();
+            chunk_pos = nl + 1;
         }
+        carry.extend_from_slice(&chunk[chunk_pos..]);
         pos += n as u64;
         index.extend(&batch, pos);
     }
 
-    index.drop_trailing_if(pos);
+    // De laatste regel van het bestand heeft geen afsluitende `\n`; die is pas nu
+    // compleet (EOF) en kan dus pas nu op een geldige recordkop gecontroleerd worden.
+    if !carry.is_empty() && line_start != 0 && is_record_header(&carry) {
+        index.extend(&[line_start], pos);
+    }
+
     index.mark_done();
     Ok(())
 }
@@ -123,6 +144,12 @@ pub fn build_index<R: Read>(
 mod tests {
     use super::*;
     use std::io::Cursor;
+
+    /// Minimale geldige recordkop (Monolog 1-stijl, geen offset): 21 bytes
+    /// (`[` + 19 datetime-bytes + `]`). Alleen de kop zelf wordt door de indexer
+    /// gecontroleerd (blueprint.md), dus de rest van de regel is vrije tekst.
+    const H0: &[u8] = b"[2026-01-01 00:00:00]";
+    const H1: &[u8] = b"[2026-01-01 00:00:01]";
 
     fn offsets_of(content: &[u8], block_size: usize) -> Vec<u64> {
         let index = RecordIndex::new();
@@ -139,41 +166,123 @@ mod tests {
     }
 
     #[test]
-    fn single_line_without_trailing_newline() {
-        // "Blijft" uit T2: een bestand zonder slot-newline levert geen fantoom-record.
-        assert_eq!(offsets_of(b"line1\nline2", DEFAULT_BLOCK_SIZE), vec![0, 6]);
+    fn two_records_the_last_without_trailing_newline() {
+        // "Blijft" uit T2: een bestand zonder slot-newline levert geen fantoom-record,
+        // en het laatste (onvolledige) record wordt nog steeds als recordstart herkend.
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" one\n");
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" two");
+        assert_eq!(
+            offsets_of(&content, DEFAULT_BLOCK_SIZE),
+            vec![0, second_start]
+        );
     }
 
     #[test]
     fn trailing_newline_does_not_add_empty_record() {
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" one\n");
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" two\n");
         assert_eq!(
-            offsets_of(b"line1\nline2\n", DEFAULT_BLOCK_SIZE),
-            vec![0, 6]
+            offsets_of(&content, DEFAULT_BLOCK_SIZE),
+            vec![0, second_start]
+        );
+    }
+
+    #[test]
+    fn continuation_line_does_not_start_a_new_record() {
+        // Kernfunctie van T4: een vervolgregel (bijvoorbeeld een stacktrace-regel)
+        // die niet met een geldige kop begint, hoort bij het lopende record.
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" boom\nStack trace:\n#0 /a.php(1): foo()\n#1 {main}\n");
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" next\n");
+        assert_eq!(
+            offsets_of(&content, DEFAULT_BLOCK_SIZE),
+            vec![0, second_start]
+        );
+    }
+
+    #[test]
+    fn continuation_line_starting_with_bracket_is_not_a_false_header() {
+        // Spiegelt F12 (task.md T4): een vervolgregel die toevallig met `[` begint
+        // (`[previous exception] ...`) maar geen geldige datetime heeft, mag geen
+        // nieuw record openen.
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" boom\n");
+        content.extend_from_slice(
+            b"[previous exception] [object] (LogicException: oorzaak at /a.php:1)\n",
+        );
+        content.extend_from_slice(b"#0 /a.php(1): foo()\n");
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" next\n");
+        assert_eq!(
+            offsets_of(&content, DEFAULT_BLOCK_SIZE),
+            vec![0, second_start]
         );
     }
 
     #[test]
     fn record_boundary_exactly_on_block_edge() {
-        // Blok 1 is precies "AAAAAAA\n" (8 bytes): de newline is de laatste byte
-        // van het eerste blok bij block_size=8.
-        let content = b"AAAAAAA\nBBBBBBB\n";
-        assert_eq!(offsets_of(content, 8), vec![0, 8]);
+        // Regel 1 is precies "[2026-01-01 00:00:00]\n" (22 bytes): de newline is de
+        // laatste byte van het eerste blok bij block_size=22.
+        let mut content = H0.to_vec();
+        content.push(b'\n');
+        assert_eq!(content.len(), 22);
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.push(b'\n');
+        assert_eq!(offsets_of(&content, 22), vec![0, second_start]);
     }
 
     #[test]
     fn crlf_split_across_block_boundary() {
-        // "ABC\r" is precies het eerste blok (4 bytes); "\n" is de eerste byte
-        // van het tweede blok. De CR en LF horen zo bij hetzelfde record, ook al
-        // scant de indexer ze in twee verschillende blokken.
-        let content = b"ABC\r\nXY";
-        assert_eq!(offsets_of(content, 4), vec![0, 5]);
+        // De `\r` is precies het laatste byte van het eerste blok; de `\n` is het
+        // eerste byte van het tweede blok. De CR en LF horen zo bij hetzelfde record,
+        // ook al scant de indexer ze in twee verschillende blokken, en de CR mag de
+        // datetime-kopcontrole niet verstoren (die stopt bij de eerste `]`, vóór de CR).
+        let mut content = H0.to_vec();
+        content.push(b'\r');
+        let block_size = content.len();
+        content.push(b'\n');
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b"\r\n");
+        assert_eq!(offsets_of(&content, block_size), vec![0, second_start]);
+    }
+
+    #[test]
+    fn header_split_across_block_boundary() {
+        // De datetime-kop van het tweede record wordt over twee bloklezingen heen
+        // gescand (block_size=32 valt middenin "[2026-01-01 00:00:01]"); de `carry`-
+        // buffer in build_index moet de regel toch in zijn geheel zien.
+        let mut content = H0.to_vec();
+        content.push(b'\n');
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.push(b'\n');
+        // block_size=32 valt binnen het haakje van het tweede record ([22..43)):
+        // precies de situatie die deze test moet dekken.
+        assert!((second_start as usize..second_start as usize + 21).contains(&32));
+        assert_eq!(offsets_of(&content, 32), vec![0, second_start]);
     }
 
     #[test]
     fn many_small_blocks_find_same_offsets_as_one_big_block() {
-        let content = b"a\nbb\nccc\nd\n\ne\n";
-        let whole = offsets_of(content, DEFAULT_BLOCK_SIZE);
-        let one_byte_at_a_time = offsets_of(content, 1);
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" a\ncontinuation one\ncontinuation two\n");
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" b\n\nlast continuation without newline");
+        let whole = offsets_of(&content, DEFAULT_BLOCK_SIZE);
+        let one_byte_at_a_time = offsets_of(&content, 1);
         assert_eq!(whole, one_byte_at_a_time);
+        assert_eq!(whole, vec![0, second_start]);
     }
 }
