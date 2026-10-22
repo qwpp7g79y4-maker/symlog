@@ -1,0 +1,80 @@
+[
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T10:30:45.123456+01:00",
+    "extra": [],
+    "level": "DEBUG",
+    "message": "User cache warmed"
+  },
+  {
+    "channel": "request",
+    "context": {
+      "ip": "10.0.0.5"
+    },
+    "datetime": "2026-01-15T10:30:46.000000+01:00",
+    "extra": [],
+    "level": "INFO",
+    "message": "Incoming GET /health"
+  },
+  {
+    "channel": "doctrine",
+    "context": {
+      "duration_ms": 120
+    },
+    "datetime": "2026-01-15T10:30:47.500000+01:00",
+    "extra": [],
+    "level": "NOTICE",
+    "message": "Slow query detected"
+  },
+  {
+    "channel": "security",
+    "context": {
+      "username": "demo"
+    },
+    "datetime": "2026-01-15T10:30:48.250000+01:00",
+    "extra": [],
+    "level": "WARNING",
+    "message": "Failed login attempt"
+  },
+  {
+    "channel": "php",
+    "context": {
+      "file": "/app/src/Service.php"
+    },
+    "datetime": "2026-01-15T10:30:49.000000+01:00",
+    "extra": [],
+    "level": "ERROR",
+    "message": "Undefined array key \"foo\""
+  },
+  {
+    "channel": "console",
+    "context": {
+      "command": "app:sync"
+    },
+    "datetime": "2026-01-15T10:30:50.750000+01:00",
+    "extra": {
+      "memory_mb": 256
+    },
+    "level": "CRITICAL",
+    "message": "Command failed"
+  },
+  {
+    "channel": "app",
+    "context": {
+      "percent": 92
+    },
+    "datetime": "2026-01-15T10:30:51.333333+01:00",
+    "extra": [],
+    "level": "ALERT",
+    "message": "Disk usage above threshold"
+  },
+  {
+    "channel": "request",
+    "context": [],
+    "datetime": "2026-01-15T10:30:52.999999+01:00",
+    "extra": [],
+    "level": "EMERGENCY",
+    "message": "Service unreachable"
+  }
+]

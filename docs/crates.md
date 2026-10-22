@@ -27,7 +27,7 @@ Dit document legt per crate uit de geplande lijst (`blueprint.md`, sectie
 | `crossterm` | tui | gepland, nog geen dependency | MIT, geen netwerk, komt in T8 |
 | `clap` (derive) | main | gepland, nog geen dependency | MIT OR Apache-2.0, komt met de echte CLI-parser |
 | `memchr` | reader::index | toegevoegd in T2 | MIT OR Apache-2.0 |
-| `serde`, `serde_json` | parse::json, model | gepland, nog geen dependency | MIT OR Apache-2.0, komt in T5 |
+| `serde_json` | model, parse::line | toegevoegd in T3 (v1.0.154) | MIT OR Apache-2.0; alleen `serde_json::Value` (geen `serde`-dependency, geen `derive`-feature: die zou `proc-macro2`/`quote`/`syn`/`unicode-ident` meebrengen, met een `Unicode-3.0`-licentieclausule die nog niet in de allowlist stond). `context`/`extra` in LineFormatter-regels zijn JSON (task.md T3), dus eerder nodig dan gepland; `serde` zelf (met `derive`) komt alsnog in T5 voor de JsonFormatter-structs |
 | `regex` | filter | gepland, nog geen dependency | MIT OR Apache-2.0, lineaire tijd (geen backtracking-DoS), komt in T7 |
 | `jiff` | time | gepland, nog geen dependency | MIT OR Apache-2.0; voorkeur boven `time`+`chrono-tz` is vastgelegd (task.md open punt 3), komt in T7 |
 | `unicode-width`, `unicode-segmentation` | tui::width | gepland, nog geen dependency | MIT OR Apache-2.0, komt in T8 |

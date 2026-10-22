@@ -23,6 +23,7 @@ path = "src/main.rs"
 lru = "0.19.0"
 memchr = "2.8.3"
 memmap2 = { version = "0.9.12", optional = true }
+serde_json = "1.0.154"
 
 [dev-dependencies]
 tempfile = "3.27.0"

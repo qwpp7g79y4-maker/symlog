@@ -1,9 +1,13 @@
 //! symlog: terminal-logviewer voor Symfony/Monolog-logs (read-only, geen netwerk).
 //!
-//! T1 legde het repo-skelet vast. T2 voegt de eerste echte module toe: [`reader`]
-//! (offset-index en lazy records, zie `blueprint.md`). Parsing, filters, TUI, editor
-//! en follow volgen in latere taken.
+//! T1 legde het repo-skelet vast, T2 voegde [`reader`] toe (offset-index en lazy
+//! records). T3 voegt [`model`] (gedeelde recordtypes) en [`parse`] (de
+//! LineFormatter-parser) toe, zie `blueprint.md`. Multiline/stacktraces, de
+//! JsonFormatter, de Raw-terugval, tijdzones/filters, TUI, editor en follow volgen in
+//! latere taken.
 
+pub mod model;
+pub mod parse;
 pub mod reader;
 
 /// Placeholder tot er een CLI-laag is die dit toont; bestaat zodat de crate een

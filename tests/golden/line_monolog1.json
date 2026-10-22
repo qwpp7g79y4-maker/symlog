@@ -1,0 +1,20 @@
+[
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2015-05-01 12:34:56",
+    "extra": [],
+    "level": "INFO",
+    "message": "Legacy entry without timezone info"
+  },
+  {
+    "channel": "request",
+    "context": {
+      "code": 500
+    },
+    "datetime": "2015-05-01 12:35:10",
+    "extra": [],
+    "level": "ERROR",
+    "message": "Legacy error entry"
+  }
+]

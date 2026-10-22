@@ -1,0 +1,43 @@
+[
+  {
+    "channel": "app",
+    "context": {
+      "status": "ok"
+    },
+    "datetime": "2026-01-15T11:00:00.000000+01:00",
+    "extra": [],
+    "level": "INFO",
+    "message": "Payload was {not valid json} but handled fine"
+  },
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T11:00:01.000000+01:00",
+    "extra": [],
+    "level": "INFO",
+    "message": "Array bounds check arr[5] exceeded"
+  },
+  {
+    "channel": "app",
+    "context": {
+      "tags": [
+        1,
+        2,
+        3
+      ],
+      "user": {
+        "id": 42,
+        "roles": [
+          "admin",
+          "editor"
+        ]
+      }
+    },
+    "datetime": "2026-01-15T11:00:02.000000+01:00",
+    "extra": {
+      "request_id": "abc-123"
+    },
+    "level": "WARNING",
+    "message": "Nested context example"
+  }
+]
