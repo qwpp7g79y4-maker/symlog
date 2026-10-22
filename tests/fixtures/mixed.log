@@ -1,0 +1,8 @@
+[2026-01-15T15:00:00.000000+01:00] app.INFO: Deploy started [] []
+{"message": "Deploy started (json)", "level": 200, "level_name": "INFO", "channel": "app", "datetime": "2026-01-15T15:00:01.000000+01:00"}
+[2026-01-15T15:00:02.000000+01:00] console.WARNING: Config file still on the old LineFormatter {"old_format": true} []
+{"message": "Config file switched to JsonFormatter", "level": 300, "channel": "console", "datetime": "2026-01-15T15:00:03.000000+01:00", "context": {"new_format": true}}
+[2026-01-15T15:00:04.000000+01:00] request.ERROR: Request failed before the switch {"path":"/old"} []
+{"message": "Request failed after the switch", "level": 400, "level_name": "ERROR", "channel": "request", "datetime": "2026-01-15T15:00:05.000000+01:00", "context": {"path": "/new"}}
+[2026-01-15T15:00:06.000000+01:00] app.CRITICAL: Deploy finished [] []
+{"message": "Deploy finished (json)", "level": 500, "level_name": "CRITICAL", "channel": "app", "datetime": "2026-01-15T15:00:07.000000+01:00"}

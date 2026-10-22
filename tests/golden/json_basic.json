@@ -1,0 +1,102 @@
+[
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T14:00:00.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "DEBUG",
+    "message": "Worker started"
+  },
+  {
+    "channel": "request",
+    "context": {
+      "ip": "10.0.0.5"
+    },
+    "datetime": "2026-01-15T14:00:01.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "INFO",
+    "message": "Incoming GET /health"
+  },
+  {
+    "channel": "doctrine",
+    "context": {
+      "duration_ms": 120
+    },
+    "datetime": "2026-01-15T14:00:02.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "NOTICE",
+    "message": "Slow query detected"
+  },
+  {
+    "channel": "security",
+    "context": [],
+    "datetime": "2026-01-15T14:00:03.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "WARNING",
+    "message": "Failed login attempt"
+  },
+  {
+    "channel": "console",
+    "context": {
+      "command": "app:sync"
+    },
+    "datetime": "2026-01-15T14:00:04.000000+01:00",
+    "extra": {
+      "memory_mb": 256
+    },
+    "frames": [],
+    "level": "CRITICAL",
+    "message": "Command failed"
+  },
+  {
+    "channel": "app",
+    "context": {
+      "percent": 92
+    },
+    "datetime": "2026-01-15T14:00:05.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "ALERT",
+    "message": "Disk usage above threshold {oddly-braced}"
+  },
+  {
+    "channel": "app",
+    "context": {
+      "exception": {
+        "class": "RuntimeException",
+        "code": 0,
+        "file": "/var/www/src/Worker.php:88",
+        "message": "boom",
+        "trace": [
+          "#0 /var/www/src/Dispatcher.php(40): App\\Worker->run()",
+          "#1 {main}"
+        ]
+      }
+    },
+    "datetime": "2026-01-15T14:00:06.000000+01:00",
+    "extra": {},
+    "frames": [
+      {
+        "func": "",
+        "line": 88,
+        "path": "/var/www/src/Worker.php"
+      },
+      {
+        "func": "App\\Worker->run()",
+        "line": 40,
+        "path": "/var/www/src/Dispatcher.php"
+      },
+      {
+        "func": "{main}",
+        "line": null,
+        "path": null
+      }
+    ],
+    "level": "EMERGENCY",
+    "message": "Uncaught error"
+  }
+]

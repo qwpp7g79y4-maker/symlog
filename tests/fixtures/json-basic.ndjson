@@ -1,0 +1,7 @@
+{"message": "Worker started", "context": [], "level": 100, "level_name": "DEBUG", "channel": "app", "datetime": "2026-01-15T14:00:00.000000+01:00", "extra": []}
+{"message": "Incoming GET /health", "context": {"ip": "10.0.0.5"}, "level": 200, "level_name": "INFO", "channel": "request", "datetime": "2026-01-15T14:00:01.000000+01:00", "extra": []}
+{"message": "Slow query detected", "context": {"duration_ms": 120}, "level": 250, "channel": "doctrine", "datetime": "2026-01-15T14:00:02.000000+01:00", "extra": []}
+{"message": "Failed login attempt", "level_name": "WARNING", "channel": "security", "datetime": "2026-01-15T14:00:03.000000+01:00"}
+{"message": "Command failed", "context": {"command": "app:sync"}, "level": 500, "level_name": "CRITICAL", "channel": "console", "datetime": "2026-01-15T14:00:04.000000+01:00", "extra": {"memory_mb": 256}}
+{"message": "Disk usage above threshold {oddly-braced}", "context": {"percent": 92}, "level": 550, "level_name": "ALERT", "channel": "app", "datetime": "2026-01-15T14:00:05.000000+01:00", "extra": []}
+{"message": "Uncaught error", "context": {"exception": {"class": "RuntimeException", "message": "boom", "code": 0, "file": "/var/www/src/Worker.php:88", "trace": ["#0 /var/www/src/Dispatcher.php(40): App\\Worker->run()", "#1 {main}"]}}, "level": 600, "level_name": "EMERGENCY", "channel": "app", "datetime": "2026-01-15T14:00:06.000000+01:00", "extra": {}}

@@ -47,6 +47,25 @@ impl Level {
             Level::Emergency => "EMERGENCY",
         }
     }
+
+    /// Herkent een Monolog/PSR-3-niveauwaarde (het integer `level`-veld van de
+    /// JsonFormatter, task.md T5), `None` als `value` geen van de acht vaste waarden
+    /// is. Monolog kent deze waarden vast toe (RFC 5424-stijl, niet configureerbaar),
+    /// dus een onbekend getal is altijd een teken van een niet-Monolog-bron en wordt
+    /// niet geraden.
+    pub fn from_monolog_int(value: i64) -> Option<Level> {
+        match value {
+            100 => Some(Level::Debug),
+            200 => Some(Level::Info),
+            250 => Some(Level::Notice),
+            300 => Some(Level::Warning),
+            400 => Some(Level::Error),
+            500 => Some(Level::Critical),
+            550 => Some(Level::Alert),
+            600 => Some(Level::Emergency),
+            _ => None,
+        }
+    }
 }
 
 fn match_level(name: &str) -> Option<Level> {
@@ -145,6 +164,34 @@ mod tests {
     fn level_parse_rejects_unknown_names() {
         assert_eq!(Level::parse("TRACE"), None);
         assert_eq!(Level::parse(""), None);
+    }
+
+    #[test]
+    fn from_monolog_int_recognises_all_eight_values() {
+        let pairs = [
+            (100, Level::Debug),
+            (200, Level::Info),
+            (250, Level::Notice),
+            (300, Level::Warning),
+            (400, Level::Error),
+            (500, Level::Critical),
+            (550, Level::Alert),
+            (600, Level::Emergency),
+        ];
+        for (value, expected) in pairs {
+            assert_eq!(
+                Level::from_monolog_int(value),
+                Some(expected),
+                "waarde {value}"
+            );
+        }
+    }
+
+    #[test]
+    fn from_monolog_int_rejects_unknown_values() {
+        assert_eq!(Level::from_monolog_int(0), None);
+        assert_eq!(Level::from_monolog_int(350), None);
+        assert_eq!(Level::from_monolog_int(-1), None);
     }
 
     #[test]

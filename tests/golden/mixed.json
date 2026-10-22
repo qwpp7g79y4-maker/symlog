@@ -1,0 +1,82 @@
+[
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T15:00:00.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "INFO",
+    "message": "Deploy started"
+  },
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T15:00:01.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "INFO",
+    "message": "Deploy started (json)"
+  },
+  {
+    "channel": "console",
+    "context": {
+      "old_format": true
+    },
+    "datetime": "2026-01-15T15:00:02.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "WARNING",
+    "message": "Config file still on the old LineFormatter"
+  },
+  {
+    "channel": "console",
+    "context": {
+      "new_format": true
+    },
+    "datetime": "2026-01-15T15:00:03.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "WARNING",
+    "message": "Config file switched to JsonFormatter"
+  },
+  {
+    "channel": "request",
+    "context": {
+      "path": "/old"
+    },
+    "datetime": "2026-01-15T15:00:04.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "ERROR",
+    "message": "Request failed before the switch"
+  },
+  {
+    "channel": "request",
+    "context": {
+      "path": "/new"
+    },
+    "datetime": "2026-01-15T15:00:05.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "ERROR",
+    "message": "Request failed after the switch"
+  },
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T15:00:06.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "CRITICAL",
+    "message": "Deploy finished"
+  },
+  {
+    "channel": "app",
+    "context": [],
+    "datetime": "2026-01-15T15:00:07.000000+01:00",
+    "extra": [],
+    "frames": [],
+    "level": "CRITICAL",
+    "message": "Deploy finished (json)"
+  }
+]

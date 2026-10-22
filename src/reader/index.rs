@@ -1,15 +1,18 @@
 //! Offset-index: alleen record-startoffsets (u64), geen kopie van de inhoud
-//! (task.md T2/T4, blueprint.md `reader::index`).
+//! (task.md T2/T4/T5, blueprint.md `reader::index`).
 //!
-//! Een record begint bij offset 0 en bij elke regel die een geldige recordkop is
-//! (task.md T4: `[` + herkende datetime, zie [`crate::parse::line::is_record_header`]).
-//! Andere regels zijn een vervolg van het lopende record (bijvoorbeeld een
-//! stacktrace-regel): ze leveren geen nieuwe offset op. Dit maakt een record
-//! inherent meerdere fysieke regels lang mogelijk. De laatste regel van een bestand
-//! dat zelf met een `\n` eindigt, levert nooit een extra leeg record op, want een lege
-//! regel is nooit een geldige recordkop.
+//! Een record begint bij offset 0 en bij elke regel die een geldige recordkop is:
+//! `[` + herkende datetime voor LineFormatter (task.md T4), of `{` met een
+//! `"datetime"`-veld voor JsonFormatter (task.md T5) — zie
+//! [`crate::parse::is_record_header`], die beide koppen combineert zodat een gemengd
+//! bestand (T5, F6) ook via de streaming-indexer correct in records valt. Andere
+//! regels zijn een vervolg van het lopende record (bijvoorbeeld een stacktrace-regel):
+//! ze leveren geen nieuwe offset op. Dit maakt een record inherent meerdere fysieke
+//! regels lang mogelijk. De laatste regel van een bestand dat zelf met een `\n`
+//! eindigt, levert nooit een extra leeg record op, want een lege regel is nooit een
+//! geldige recordkop.
 
-use crate::parse::line::is_record_header;
+use crate::parse::is_record_header;
 use memchr::memchr_iter;
 use std::io::{self, Read};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -284,5 +287,77 @@ mod tests {
         let one_byte_at_a_time = offsets_of(&content, 1);
         assert_eq!(whole, one_byte_at_a_time);
         assert_eq!(whole, vec![0, second_start]);
+    }
+
+    #[test]
+    fn json_record_header_opens_a_new_record_in_a_mixed_file() {
+        // Task.md T5 (F6): een JSON-record na een lijnformaat-record moet zijn eigen
+        // offset krijgen, niet als vervolgregel bij het vorige record getrokken worden.
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" line record\n");
+        let second_start = content.len() as u64;
+        content.extend_from_slice(
+            br#"{"message":"json record","level":200,"channel":"app","datetime":"2026-01-01T00:00:02+00:00"}"#,
+        );
+        content.push(b'\n');
+        assert_eq!(
+            offsets_of(&content, DEFAULT_BLOCK_SIZE),
+            vec![0, second_start]
+        );
+    }
+
+    #[test]
+    fn continuation_line_starting_with_brace_is_not_a_false_json_header() {
+        // Spiegelt de `[`-variant hierboven: een vervolgregel van een lijnformaat-
+        // stacktrace die toevallig met `{` begint maar geen geldig JSON-object met een
+        // `"datetime"`-veld is, mag geen nieuw record openen.
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" boom\n");
+        content.extend_from_slice(b"{not json, just a stray brace in the message}\n");
+        content.extend_from_slice(br#"{"no_datetime_field": true}"#);
+        content.push(b'\n');
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" next\n");
+        assert_eq!(
+            offsets_of(&content, DEFAULT_BLOCK_SIZE),
+            vec![0, second_start]
+        );
+    }
+
+    #[test]
+    fn line_record_follows_json_record_in_a_mixed_file() {
+        // De omgekeerde volgorde van de eerste test hierboven: na een JSON-record moet
+        // een lijnformaat-kop ook zijn eigen offset krijgen.
+        let mut content: Vec<u8> =
+            br#"{"message":"json first","level":200,"channel":"app","datetime":"2026-01-01T00:00:00+00:00"}"#
+                .to_vec();
+        content.push(b'\n');
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" line second\n");
+        assert_eq!(
+            offsets_of(&content, DEFAULT_BLOCK_SIZE),
+            vec![0, second_start]
+        );
+    }
+
+    #[test]
+    fn pretty_printed_json_record_is_not_merged_across_lines() {
+        // Task.md T5 "Blijft": een pretty-printed (meerregelig) JSON-record wordt in
+        // v1 niet samengevoegd. De openende `{` alleen heeft geen `"datetime"`-veld op
+        // die regel, dus elke vervolgregel van het pretty-printed blok blijft gewoon
+        // bij het voorgaande record horen in plaats van een eigen (kapot) record te
+        // worden; een echt volgend record krijgt wel zijn eigen offset.
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" before pretty json\n");
+        content.extend_from_slice(b"{\n  \"message\": \"pretty\",\n  \"level\": 200\n}\n");
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" after pretty json\n");
+        assert_eq!(
+            offsets_of(&content, DEFAULT_BLOCK_SIZE),
+            vec![0, second_start]
+        );
     }
 }
