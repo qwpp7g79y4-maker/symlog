@@ -1,0 +1,3 @@
+[2026-01-15T10:00:00.000000+01:00] app.INFO: caf� was hier
+[2026-01-15T10:00:01.000000+01:00] app.WARNING: bytes �� in message
+RAW[unknown_format] regel in Latin-1: caf� zonder kop

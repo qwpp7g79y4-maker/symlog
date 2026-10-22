@@ -1,0 +1,5 @@
+RAW[unknown_format] regel zonder enige geldige kop aan het begin
+RAW[unknown_format] [2026-01-15T10:00:00.000000+01:00] app.ERROR: afgekapt midden in de context {"n":1,"zonder
+RAW[invalid_json] {"message":"halve json zonder sluit-haak","level":500,"channel":"app","datetime":"2026-01-15T10:00:01.000000+01:00"
+RAW[invalid_json] {'message': 'enkele quotes zijn geen geldige JSON', 'level': 500}
+RAW[unknown_format] [not-a-real-datetime] app.INFO: deze kop is geen geldige datetime [] []

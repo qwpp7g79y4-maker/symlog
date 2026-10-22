@@ -38,7 +38,8 @@ Dit document legt per crate uit de geplande lijst (`blueprint.md`, sectie
 | `anyhow` (bin) | main | gepland, nog geen dependency | MIT OR Apache-2.0; ondergrens `>=1.0.103` in `deny.toml` |
 | `thiserror` (lib) | reader/parse/editor | gepland, nog geen dependency | MIT OR Apache-2.0 |
 | `memmap2` (feature `mmap`, standaard uit) | reader | toegevoegd in T2 als optionele dependency (v0.9.12); niet standaard aan | MIT OR Apache-2.0; ondergrens `>=0.9.11` in `deny.toml`; feature `mmap` is gedefinieerd maar nog niet in code gebruikt (pread/seek is het standaardpad, zie blueprint "mmap standaard uit") |
-| dev: `insta`, `assert_cmd`, `predicates`, `proptest` | tests | gepland, nog geen dependency | alle MIT OR Apache-2.0, dev-only, niet in het release-pad |
+| dev: `insta`, `assert_cmd`, `predicates` | tests | gepland, nog geen dependency | alle MIT OR Apache-2.0, dev-only, niet in het release-pad |
+| dev: `proptest` | parse::raw | toegevoegd in T6 (v1.11.0, de hoogste versie die `rust-version = "1.85"` nog toestaat) | MIT OR Apache-2.0, dev-only; fuzz/property-test over `parse_record_lossy` (task.md T6 "Klaar als": 10 000 cases, geen paniek) |
 | dev: `tempfile` | tests | toegevoegd in T2 (v3.27.0) | MIT OR Apache-2.0, dev-only; gebruikt voor tijdelijke logbestanden in de reader-tests |
 
 ## Beslissing: XDG-configpad (`dirs` vs. alternatief)

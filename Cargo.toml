@@ -26,6 +26,7 @@ memmap2 = { version = "0.9.12", optional = true }
 serde_json = "1.0.154"
 
 [dev-dependencies]
+proptest = "1.11.0"
 tempfile = "3.27.0"
 
 [features]

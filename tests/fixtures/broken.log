@@ -1,0 +1,5 @@
+regel zonder enige geldige kop aan het begin
+[2026-01-15T10:00:00.000000+01:00] app.ERROR: afgekapt midden in de context {"n":1,"zonder
+{"message":"halve json zonder sluit-haak","level":500,"channel":"app","datetime":"2026-01-15T10:00:01.000000+01:00"
+{'message': 'enkele quotes zijn geen geldige JSON', 'level': 500}
+[not-a-real-datetime] app.INFO: deze kop is geen geldige datetime [] []

@@ -4,8 +4,10 @@
 //! echte tijdzone-semantiek met `Zoned`/`OffsetDateTime` komt in T7), kanaal, niveau,
 //! message en context/extra als JSON. T4 voegt [`Frame`] toe en breidt [`Record`] uit
 //! met `frames`: een record kan meerdere fysieke regels beslaan (stacktraces), en elk
-//! herkend stacktrace-frame wordt een `Frame`. Latere taken breiden [`Record`] verder
-//! uit met `offset` en `raw` (T6), en vervangen `channel` door een geïnterneerd type.
+//! herkend stacktrace-frame wordt een `Frame`. T6 voegt de Raw-terugval toe als los
+//! type ([`crate::parse::raw::RawRecord`]/[`crate::parse::raw::ParsedRecord`]), voor
+//! blokken die geen van beide formaten halen. Task.md T7 consolideert dat later in
+//! `Record { offset, ts, ..., raw }` en vervangt `channel` door een geïnterneerd type.
 //!
 //! Geen `serde::Serialize`-afleiding hier: dat zou de `derive`-feature van `serde`
 //! vereisen (en daarmee `proc-macro2`/`quote`/`syn`/`unicode-ident`, met een

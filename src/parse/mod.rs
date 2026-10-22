@@ -11,14 +11,18 @@
 //! bestand correct liggen.
 //!
 //! Een blok dat aan geen van beide formaten voldoet, levert `None` op bij
-//! [`parse_record`] en blijft onbehandeld tot T6 ("Blijft" in task.md T3: een
-//! onbekend formaat valt terug op een ruwe weergave, niet op een fout).
+//! [`parse_record`] ("Blijft" in task.md T3: een onbekend formaat valt terug op een
+//! ruwe weergave, niet op een fout). T6 voegt [`raw`] toe: [`parse_record_lossy`] is
+//! de bytes-bewuste tegenhanger van [`parse_record`] die dat `None` opvangt met de
+//! Raw-terugval, en nooit paniekt op ongeldige UTF-8-invoer.
 
 pub mod json;
 pub mod line;
+pub mod raw;
 pub mod trace;
 
 use crate::model::Record;
+use raw::ParsedRecord;
 
 /// Welk formaat een recordblok heeft (task.md T5; blueprint.md `parse::mod`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -62,6 +66,20 @@ pub fn parse_record_as(block: &str, format: Format) -> Option<Record> {
         Format::Line => line::parse_line(block),
         Format::Json => json::parse_json(block),
     }
+}
+
+/// Parset `bytes` zonder ooit `None` terug te geven (task.md T6 "Doet"). De bytes
+/// worden eerst lossy naar UTF-8 geconverteerd (`String::from_utf8_lossy`, U+FFFD
+/// voor ongeldige byte-sequenties) en die tekst dan net als [`parse_record`] geparst;
+/// lukt dat niet, dan is het resultaat de Raw-terugval uit [`raw`] in plaats van een
+/// weggevallen record. Dit is de eerste functie in deze module die rauwe bytes
+/// aanvaardt in plaats van al-gevalideerde tekst (vergelijk [`is_record_header`], die
+/// ook al op bytes werkt): juist ongeldige UTF-8-invoer (task.md T6, F8) moet hier
+/// zonder paniek doorheen kunnen.
+pub fn parse_record_lossy(bytes: &[u8]) -> ParsedRecord {
+    let text = String::from_utf8_lossy(bytes).into_owned();
+    let parsed = parse_record(&text);
+    ParsedRecord::from_parse(text, parsed)
 }
 
 /// Format-agnostische recordkop-check: of `line` (bytes van één fysieke regel, zonder
@@ -159,5 +177,29 @@ mod tests {
         assert_eq!(blocks.len(), 3);
         assert!(blocks[1].contains("Stack trace:"));
         assert_eq!(parse_record(blocks[1]).unwrap().frames.len(), 1);
+    }
+
+    #[test]
+    fn parse_record_lossy_wraps_recognised_blocks() {
+        let parsed = parse_record_lossy(LINE_BLOCK.as_bytes());
+        assert!(parsed.as_raw().is_none());
+        assert_eq!(parsed.to_json()["level"], "INFO");
+    }
+
+    #[test]
+    fn parse_record_lossy_falls_back_to_raw_without_panicking() {
+        // task.md T6 "Doet": een blok dat geen enkel formaat haalt, wordt Raw in
+        // plaats van weggevallen.
+        let parsed = parse_record_lossy(b"gewoon tekst, geen enkele kop");
+        assert!(parsed.as_raw().is_some());
+    }
+
+    #[test]
+    fn parse_record_lossy_never_panics_on_invalid_utf8() {
+        // task.md T6, F8: ongeldige UTF-8-bytes mogen nooit een paniek geven; de
+        // lossy-conversie vangt ze op als U+FFFD.
+        let parsed = parse_record_lossy(b"caf\xE9 zonder kop, \xFF\xFE ongeldige bytes");
+        let raw = parsed.as_raw().expect("geen van beide parsers herkent dit");
+        assert!(raw.text.contains('\u{fffd}'));
     }
 }
