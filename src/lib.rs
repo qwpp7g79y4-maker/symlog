@@ -7,7 +7,7 @@
 //! (tijdzone-weergave) en [`filter`] (kanaal/niveau/zoeken) toe. T8 voegt [`tui`] toe
 //! (ratatui + crossterm, vim-toetsen). T9 voegt [`editor`] toe (Neovim-sprong,
 //! `$EDITOR`/`vi`-terugval, padmapping). T10 voegt [`follow`] toe (`tail -f`,
-//! rotatie en afkappen).
+//! rotatie en afkappen). T11 voegt [`startup`] toe (leeg en ontbrekend bestand).
 
 pub mod editor;
 pub mod filter;
@@ -15,6 +15,7 @@ pub mod follow;
 pub mod model;
 pub mod parse;
 pub mod reader;
+pub mod startup;
 pub mod time;
 pub mod tui;
 
