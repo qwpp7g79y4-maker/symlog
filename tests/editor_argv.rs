@@ -6,14 +6,46 @@
 //! `ARGV_LOG`-waarde via [`ProcessRunner::with_env`], dus de tests mogen zonder race
 //! parallel draaien.
 
-use std::fs;
+use std::fs::{self, File};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use symlog::editor::{self, Decision, JumpContext, MapEntry, PathMap, ProcessRunner};
+use std::process::ExitStatus;
+use std::sync::Mutex;
+use symlog::editor::{
+    self, CommandRunner, Decision, JumpContext, MapEntry, PathMap, ProcessRunner,
+};
 use symlog::model::Frame;
 use tempfile::TempDir;
 
 fn fake_script_source() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/bin/record-argv")
+}
+
+/// Eén slot voor het schrijven én het starten van een nep-programma.
+///
+/// `exec` weigert met "Text file busy" zolang ergens een schrijf-descriptor op
+/// dat bestand openstaat. Een fork in een andere thread erft elke open
+/// descriptor van dit proces, ook een die nog niet gesloten is. Daarom mag er
+/// niet tegelijk geschreven en geforkt worden: het slot dekt flush, sluiten en
+/// chmod, en ook het wachten tot `exec` in het kind klaar is.
+fn with_fake_bin_lock<T>(body: impl FnOnce() -> T) -> T {
+    static LOCK: Mutex<()> = Mutex::new(());
+    let _guard = LOCK.lock().expect("slot voor nep-programma");
+    body()
+}
+
+fn install_executable(dest: &Path, bytes: &[u8]) {
+    {
+        let mut file = File::create(dest).expect("schrijf het nep-script");
+        file.write_all(bytes).expect("schrijf het nep-script");
+        file.sync_all().expect("flush het nep-script");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(dest, fs::Permissions::from_mode(0o755))
+            .expect("maak het nep-script uitvoerbaar");
+    }
 }
 
 /// Een tijdelijke `PATH` met alleen het argv-opnamescriptje, onder elk van `names`.
@@ -22,35 +54,44 @@ struct FakeBin {
     log: PathBuf,
 }
 
+/// Start het nep-programma onder hetzelfde slot als [`install_executable`].
+struct LockedRunner {
+    inner: ProcessRunner,
+}
+
+impl CommandRunner for LockedRunner {
+    fn run(&mut self, program: &str, args: &[String]) -> io::Result<ExitStatus> {
+        with_fake_bin_lock(|| self.inner.run(program, args))
+    }
+}
+
 impl FakeBin {
     fn new(names: &[&str]) -> FakeBin {
         let dir = tempfile::tempdir().expect("tmp-map voor nep-PATH");
         let log = dir.path().join("argv.log");
-        for name in names {
-            let dest = dir.path().join(name);
-            fs::copy(fake_script_source(), &dest).expect("kopieer het nep-script");
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::PermissionsExt;
-                fs::set_permissions(&dest, fs::Permissions::from_mode(0o755))
-                    .expect("maak het nep-script uitvoerbaar");
+        let bytes = fs::read(fake_script_source()).expect("lees het nep-script");
+        with_fake_bin_lock(|| {
+            for name in names {
+                install_executable(&dir.path().join(name), &bytes);
             }
-        }
+        });
         FakeBin { dir, log }
     }
 
-    fn runner(&self) -> ProcessRunner {
-        ProcessRunner::with_env(
-            self.dir
-                .path()
-                .to_str()
-                .expect("tmp-pad is utf-8")
-                .to_string(),
-            vec![(
-                "ARGV_LOG".to_string(),
-                self.log.to_str().expect("log-pad is utf-8").to_string(),
-            )],
-        )
+    fn runner(&self) -> LockedRunner {
+        LockedRunner {
+            inner: ProcessRunner::with_env(
+                self.dir
+                    .path()
+                    .to_str()
+                    .expect("tmp-pad is utf-8")
+                    .to_string(),
+                vec![(
+                    "ARGV_LOG".to_string(),
+                    self.log.to_str().expect("log-pad is utf-8").to_string(),
+                )],
+            ),
+        }
     }
 
     fn path_var(&self) -> String {
