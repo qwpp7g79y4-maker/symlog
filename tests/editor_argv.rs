@@ -3,8 +3,10 @@
 //! (`tests/bin/record-argv`, zie dat bestand) dat zijn eigen argv naar een tmp-bestand
 //! schrijft. Niets hier raakt het procesmilieu van de testrunner aan (geen
 //! `std::env::set_var`): elke test krijgt zijn eigen tijdelijke `PATH` en
-//! `ARGV_LOG`-waarde via [`ProcessRunner::with_env`], dus de tests mogen zonder race
-//! parallel draaien.
+//! `ARGV_LOG`-waarde via [`ProcessRunner::with_env`]. Schrijven en starten van
+//! het nep-programma delen één slot: een fork erft anders een open
+//! schrijf-descriptor en `exec` weigert met "Text file busy". Die tests lopen
+//! daardoor niet racevrij parallel.
 
 use std::fs::{self, File};
 use std::io::{self, Write};

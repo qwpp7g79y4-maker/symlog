@@ -160,6 +160,23 @@ mod tests {
             .expect("write");
     }
 
+    /// Maakt `path` in één zichtbare stap aan: schrijven naar een tijdelijke naam
+    /// in dezelfde map, daarna hernoemen. Hernoemen is atomair, zodat een watcher
+    /// het pad nooit als leeg bestand ziet terwijl de bytes nog onderweg zijn.
+    fn publish_file(path: &Path, content: &[u8]) {
+        let tmp = path.with_file_name(format!(
+            ".{}.part",
+            path.file_name()
+                .and_then(|name| name.to_str())
+                .expect("name")
+        ));
+        {
+            let mut file = File::create(&tmp).expect("create");
+            file.write_all(content).expect("write");
+        }
+        fs::rename(&tmp, path).expect("rename");
+    }
+
     #[test]
     fn missing_path_is_classified_as_missing() {
         let dir = tempfile::tempdir().expect("tempdir");
@@ -275,7 +292,7 @@ mod tests {
 
         thread::spawn(move || {
             thread::sleep(Duration::from_millis(150));
-            write_file(
+            publish_file(
                 &path_for_writer,
                 b"[2026-01-01 00:00:00] a.INFO: hier ben ik\n",
             );
