@@ -33,6 +33,7 @@ ratatui = { version = "0.30.2", default-features = false, features = [
 ] }
 regex = "1.13.1"
 serde_json = "1.0.154"
+shell-words = "1.1.1"
 unicode-segmentation = "1.13.3"
 unicode-width = "0.2.0"
 

@@ -1,0 +1,22 @@
+#!/bin/sh
+# Nep-editor/nep-nvim voor tests/editor_argv.rs (task.md T9 "Klaar als": "scriptje in
+# tests/bin dat argv naar een bestand schrijft in tmp"). Schrijft de ontvangen argv
+# (één argument per regel) naar $ARGV_LOG, gevolgd door een "---"-scheidingsregel,
+# en sluit af met $ARGV_EXIT (standaard 0). De scheidingsregel laat een test meerdere
+# losse aanroepen (bijvoorbeeld de twee nvim --server-aanroepen van één editor-sprong)
+# uit elkaar houden, ook al wordt dit scriptje binnen één test-proces meerdere keren
+# aangeroepen (append, nooit overschrijven).
+#
+# Wordt onder meerdere namen in een tijdelijke $PATH gezet (symlog/tests/editor_argv.rs
+# kopieert dit scriptje naar "nvim", "nano", "code", "vi", ...): het scriptje zelf
+# gedraagt zich overal identiek, alleen de naam waaronder het werd aangeroepen doet
+# ertoe voor welke stap in de editor-beslisboom getest wordt.
+set -eu
+: "${ARGV_LOG:?ARGV_LOG niet gezet}"
+{
+    for arg in "$@"; do
+        printf '%s\n' "$arg"
+    done
+    printf '%s\n' '---'
+} >> "$ARGV_LOG"
+exit "${ARGV_EXIT:-0}"

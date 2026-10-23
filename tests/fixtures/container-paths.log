@@ -1,0 +1,8 @@
+[2026-02-10T09:15:00.000000+01:00] app.ERROR: Uncaught RuntimeException: boom in /var/www/html/src/Controller/HomeController.php:28
+Stack trace:
+#0 /var/www/html/src/Controller/HomeController.php(28): App\Controller\HomeController->index()
+#1 /var/www/html/src/Controller/Sub/DeepController.php(9): App\Controller\HomeController->__invoke()
+#2 /app/vendor/symfony/http-kernel/HttpKernel.php(123): App\Controller\Sub\DeepController->handle()
+#3 /app/vendor/symfony/http-kernel/HttpKernel.php(76): Symfony\Component\HttpKernel\HttpKernel->handleRaw()
+#4 [internal function]: Symfony\Component\HttpKernel\HttpKernel->handle()
+#5 {main} [] []

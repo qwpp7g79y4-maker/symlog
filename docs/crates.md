@@ -34,7 +34,7 @@ Dit document legt per crate uit de geplande lijst (`blueprint.md`, sectie
 | `unicode-segmentation` | tui::width | toegevoegd in T8 (v1.13.3) | MIT OR Apache-2.0; grafeemclusters (`graphemes(true)`) zodat afkappen nooit een cluster middendoor snijdt |
 | `notify` | follow | gepland, nog geen dependency | MIT OR Apache-2.0/CC0-1.0 (meerdere sub-crates), komt in T10; alleen lokale FS-events, geen netwerk |
 | `lru` | reader::cache | toegevoegd in T2 (v0.19.0) | MIT; ondergrens `>=0.18.2` in `deny.toml`. Die ondergrens vereist rustc 1.85.0, dus `rust-version` in `Cargo.toml` ging in T2 van 1.82 naar 1.85 |
-| `shell-words` | editor::fallback | gepland, nog geen dependency | MIT OR Apache-2.0, komt in T9 |
+| `shell-words` | editor::fallback | toegevoegd in T9 (v1.1.1) | MIT OR Apache-2.0, geen netwerk, geen build-script. Splitst `$VISUAL`/`$EDITOR`-waarden zoals `"code --wait"` in losse argv-delen zonder een shell te starten (task.md T9 "Doet": "nooit via een shell") |
 | `toml` | config | gepland, nog geen dependency | MIT OR Apache-2.0, komt met config-laden |
 | `anyhow` (bin) | main | gepland, nog geen dependency | MIT OR Apache-2.0; ondergrens `>=1.0.103` in `deny.toml` |
 | `thiserror` (lib) | reader/parse/editor | gepland, nog geen dependency | MIT OR Apache-2.0 |

@@ -5,8 +5,10 @@
 //! LineFormatter-parser) toe, zie `blueprint.md`. T4/T5/T6 breidden [`parse`] uit met
 //! multiline-records, de JsonFormatter en de Raw-terugval. T7 voegt [`time`]
 //! (tijdzone-weergave) en [`filter`] (kanaal/niveau/zoeken) toe. T8 voegt [`tui`] toe
-//! (ratatui + crossterm, vim-toetsen). Editor en follow volgen in latere taken.
+//! (ratatui + crossterm, vim-toetsen). T9 voegt [`editor`] toe (Neovim-sprong,
+//! `$EDITOR`/`vi`-terugval, padmapping). Follow volgt in een latere taak.
 
+pub mod editor;
 pub mod filter;
 pub mod model;
 pub mod parse;
