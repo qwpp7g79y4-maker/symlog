@@ -23,9 +23,11 @@ jobs:
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
 
-  # Draait de geheugentest uit de benchmark-taak (T12, release-build). Zolang die test
-  # nog niet bestaat matcht de filter niets en slaagt de job met "0 tests run": de job
-  # staat hier al zodat T12 alleen de test zelf nog moet toevoegen.
+  # Draait de 256 MiB-geheugen/tijdbenchmark uit T12 (`tests/gen_big.rs`,
+  # `bench_mem_256mib_ci_fixture`) in release; de 2 GiB-variant blijft `#[ignore]` en
+  # draait hier dus niet mee. Faalt op dit moment op het filter-tijdbudget (zie
+  # docs/perf.md, "Niet gehaald"): dat is een gemeten, gerapporteerd tekort, geen
+  # CI-configuratiefout.
   bench-mem:
     runs-on: ubuntu-latest
     steps:
