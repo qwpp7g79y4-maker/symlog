@@ -59,6 +59,13 @@ impl ChannelFilter {
         ChannelFilter { include, exclude }
     }
 
+    /// De expliciete inclusielijst (zonder de `!`-uitsluitingen), voor bijvoorbeeld de
+    /// TUI-kanaalkiezer (task.md T8) die moet weten welke kanalen al aangevinkt zouden
+    /// moeten zijn als het filter opnieuw geopend wordt.
+    pub fn included_channels(&self) -> &[String] {
+        &self.include
+    }
+
     /// Of `channel` door dit filter komt: niet uitgesloten, en (als er expliciete
     /// inclusies zijn) één van die inclusies.
     pub fn matches(&self, channel: &str) -> bool {

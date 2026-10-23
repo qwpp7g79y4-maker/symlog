@@ -227,7 +227,7 @@ fn rfind_json_blob(s: &str) -> Option<usize> {
         idx -= 1;
         let c = b[idx];
         if in_string {
-            if c == b'"' && preceding_backslashes(b, idx) % 2 == 0 {
+            if c == b'"' && preceding_backslashes(b, idx).is_multiple_of(2) {
                 in_string = false;
             }
             continue;

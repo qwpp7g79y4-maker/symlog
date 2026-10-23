@@ -1,0 +1,10 @@
+ symlog — 1/8 records
+10:30:45 DEBUG     app      User cache w
+10:30:46 INFO      request  Incoming GET
+10:30:47 NOTICE    doctrine Slow query d
+10:30:48 WARNING   security Failed login
+10:30:49 ERROR     php      Undefined ar
+10:30:50 CRITICAL  console  Command fail
+10:30:51 ALERT     app      Disk usage a
+10:30:52 EMERGENCY request  Service unre
+j/k gg/G Ctrl-d/u / n/N c l F o y ? q

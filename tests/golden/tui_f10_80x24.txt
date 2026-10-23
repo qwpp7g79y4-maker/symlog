@@ -1,0 +1,24 @@
+ symlog — 1/4 records
+10:00:00 INFO      app      Family emoji 👨‍👩‍👧‍👦  arrived safely
+10:00:01 INFO      app      你 好 世 界  CJK greeting rendered correctly
+10:00:02 INFO      app      Combining accent café vs café
+10:00:03 INFO      app      Tab␉separated␉columns␉here
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+j/k gg/G Ctrl-d/u / n/N c l F o y ? q

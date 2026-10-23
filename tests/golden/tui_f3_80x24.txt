@@ -1,0 +1,24 @@
+ symlog — 1/1 records                   ┌ detail ──────────────────────────────┐
+12:00:00 CRITICAL  app      Uncaught Run│2026-01-15T12:00:00.000000+01:00 app.C│
+                                        │Uncaught RuntimeException: boom in /va│
+                                        │Stack trace:                          │
+                                        │#0 /var/www/src/Dispatcher.php(40): Ap│
+                                        │#1 /var/www/src/Dispatcher.php(41): Ap│
+                                        │#2 /var/www/src/Dispatcher.php(42): Ap│
+                                        │#3 /var/www/src/Dispatcher.php(43): Ap│
+                                        │#4 /var/www/src/Dispatcher.php(44): Ap│
+                                        │#5 /var/www/src/Dispatcher.php(45): Ap│
+                                        │#6 /var/www/src/Dispatcher.php(46): Ap│
+                                        │#7 /var/www/src/Dispatcher.php(47): Ap│
+                                        │#8 /var/www/src/Dispatcher.php(48): Ap│
+                                        │#9 /var/www/src/Dispatcher.php(49): Ap│
+                                        │#10 /var/www/src/Dispatcher.php(50): A│
+                                        │#11 /var/www/src/Dispatcher.php(51): A│
+                                        │#12 /var/www/src/Dispatcher.php(52): A│
+                                        │#13 /var/www/src/Dispatcher.php(53): A│
+                                        │#14 /var/www/src/Dispatcher.php(54): A│
+                                        │#15 /var/www/src/Dispatcher.php(55): A│
+                                        │#16 /var/www/src/Dispatcher.php(56): A│
+                                        │#17 /var/www/src/Dispatcher.php(57): A│
+                                        └──────────────────────────────────────┘
+j/k gg/G Ctrl-d/u / n/N c l F o y ? q

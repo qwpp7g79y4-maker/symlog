@@ -1,0 +1,10 @@
+ symlog — 1/4 records
+10:00:00 INFO      app      Family emoji
+10:00:01 INFO      app      你 好 世 界  CJK
+10:00:02 INFO      app      Combining ac
+10:00:03 INFO      app      Tab␉separate
+
+
+
+
+j/k gg/G Ctrl-d/u / n/N c l F o y ? q

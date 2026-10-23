@@ -28,6 +28,10 @@ allow = [
     "BSD-3-Clause",
     "ISC",
     "Zlib",
+    # Toegevoegd in T8: `unicode-ident` (transitief via `proc-macro2`/`syn`, onvermijdelijk
+    # via ratatui's `instability`/`strum_macros`-proc-macro's) gebruikt deze permissieve
+    # licentie. Besluit vastgelegd in docs/crates.md; alleen deze ene licentie toegevoegd.
+    "Unicode-3.0",
 ]
 
 [licenses.private]

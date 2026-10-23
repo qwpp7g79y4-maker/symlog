@@ -1,0 +1,50 @@
+ symlog — 1/8 records
+10:30:45 DEBUG     app      User cache warmed
+10:30:46 INFO      request  Incoming GET /health
+10:30:47 NOTICE    doctrine Slow query detected
+10:30:48 WARNING   security Failed login attempt
+10:30:49 ERROR     php      Undefined array key "foo"
+10:30:50 CRITICAL  console  Command failed
+10:30:51 ALERT     app      Disk usage above threshold
+10:30:52 EMERGENCY request  Service unreachable
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+j/k gg/G Ctrl-d/u / n/N c l F o y ? q

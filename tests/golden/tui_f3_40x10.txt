@@ -1,0 +1,10 @@
+ symlog — 1/1 record┌ detail ──────────┐
+12:00:00 CRITICAL  a│2026-01-15T12:00:0│
+                    │Uncaught RuntimeEx│
+                    │Stack trace:      │
+                    │#0 /var/www/src/Di│
+                    │#1 /var/www/src/Di│
+                    │#2 /var/www/src/Di│
+                    │#3 /var/www/src/Di│
+                    └──────────────────┘
+j/k gg/G Ctrl-d/u / n/N c l F o y ? q
