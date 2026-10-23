@@ -1,0 +1,2 @@
+[2026-01-15T15:00:04.000000+01:00] request.ERROR: Request failed before the switch
+[2026-01-15T15:00:05.000000+01:00] request.ERROR: Request failed after the switch

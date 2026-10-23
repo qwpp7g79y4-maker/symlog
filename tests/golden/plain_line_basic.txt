@@ -1,0 +1,8 @@
+[2026-01-15T10:30:45.123456+01:00] app.DEBUG: User cache warmed
+[2026-01-15T10:30:46.000000+01:00] request.INFO: Incoming GET /health
+[2026-01-15T10:30:47.500000+01:00] doctrine.NOTICE: Slow query detected
+[2026-01-15T10:30:48.250000+01:00] security.WARNING: Failed login attempt
+[2026-01-15T10:30:49.000000+01:00] php.ERROR: Undefined array key "foo"
+[2026-01-15T10:30:50.750000+01:00] console.CRITICAL: Command failed
+[2026-01-15T10:30:51.333333+01:00] app.ALERT: Disk usage above threshold
+[2026-01-15T10:30:52.999999+01:00] request.EMERGENCY: Service unreachable

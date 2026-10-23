@@ -23,6 +23,11 @@ pub const EXIT_USAGE: i32 = 2;
 /// deze ook voor "geen leesrechten" bij het openen.
 pub const EXIT_IO_ERROR: i32 = 4;
 
+/// Exitcode "`--tui` gevraagd zonder tty" (task.md T13 "Doet"): zonder die vlag valt
+/// een ontbrekende tty stil terug op plain-uitvoer, maar een expliciet gevraagde TUI
+/// kan zonder een echte terminal niet getekend worden.
+pub const EXIT_TUI_REQUIRES_TTY: i32 = 3;
+
 /// Toestand van `path` op dit moment (task.md T11 "Doet"): het resultaat van één
 /// `stat` + (als dat geen map is) één poging tot `File::open`.
 #[derive(Debug)]

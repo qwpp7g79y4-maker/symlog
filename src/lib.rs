@@ -7,13 +7,17 @@
 //! (tijdzone-weergave) en [`filter`] (kanaal/niveau/zoeken) toe. T8 voegt [`tui`] toe
 //! (ratatui + crossterm, vim-toetsen). T9 voegt [`editor`] toe (Neovim-sprong,
 //! `$EDITOR`/`vi`-terugval, padmapping). T10 voegt [`follow`] toe (`tail -f`,
-//! rotatie en afkappen). T11 voegt [`startup`] toe (leeg en ontbrekend bestand).
+//! rotatie en afkappen). T11 voegt [`startup`] toe (leeg en ontbrekend bestand). T13
+//! voegt [`plain`] toe (niet-TTY-uitvoer) en verbindt de CLI (`src/main.rs`) voor het
+//! eerst met de volledige leespijplijn: modus kiezen tussen TUI en plain op basis van
+//! of stdout een tty is.
 
 pub mod editor;
 pub mod filter;
 pub mod follow;
 pub mod model;
 pub mod parse;
+pub mod plain;
 pub mod reader;
 pub mod startup;
 pub mod time;

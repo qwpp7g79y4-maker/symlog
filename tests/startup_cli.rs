@@ -30,8 +30,8 @@ fn write_file(path: &Path, content: &[u8]) {
         .expect("write");
 }
 
-/// F14: leeg bestand (0 bytes) geeft geen TUI/plain-uitvoer (de echte weergave komt
-/// pas in T13) en sluit af met exitcode 0, zonder stderr-tekst.
+/// F14: leeg bestand (0 bytes) geeft geen TUI/plain-uitvoer (geen records om te
+/// tonen, task.md T13) en sluit af met exitcode 0, zonder stderr-tekst.
 #[test]
 fn f14_empty_file_exits_zero_silently() {
     Command::cargo_bin("symlog")

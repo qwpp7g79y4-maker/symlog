@@ -518,6 +518,14 @@ impl App {
         self.recompute_visible();
     }
 
+    /// Zet het filter rechtstreeks (task.md T13: `--level`/`--channel` op de
+    /// commandoregel, vóórdat de kiezers er ooit iets mee gedaan hebben). Herberekent
+    /// de zichtbare lijst net als [`App::commit_picker`] zou doen.
+    pub fn set_filter(&mut self, filter: FilterSpec) {
+        self.filter = filter;
+        self.recompute_visible();
+    }
+
     fn recompute_visible(&mut self) {
         let selected_record_index = self.visible.get(self.selected).copied();
         self.visible = (0..self.records.len())
@@ -989,5 +997,22 @@ mod tests {
         let app = App::new(Vec::new());
         assert_eq!(app.visible_len(), 0);
         assert!(app.selected_record().is_none());
+    }
+
+    #[test]
+    fn set_filter_applies_immediately_like_the_picker_would() {
+        // task.md T13: `--level`/`--channel` moeten dezelfde filtering geven als het
+        // handmatig instellen via de kiezers (T8).
+        let mut app = sample_app();
+        app.set_filter(FilterSpec {
+            channels: ChannelFilter::from_specs(["app"]),
+            levels: Some(LevelFilter::parse(">=error").unwrap()),
+            search: None,
+        });
+        assert_eq!(app.visible_len(), 1);
+        let ParsedRecord::Record(record) = app.selected_record().unwrap() else {
+            panic!("verwacht Record")
+        };
+        assert_eq!(record.message, "foo one");
     }
 }
