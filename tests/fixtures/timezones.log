@@ -1,0 +1,4 @@
+[2026-10-25T01:30:00.000000+02:00] app.INFO: Voor de wisseling (CEST) [] []
+[2026-10-25T02:30:00.000000+01:00] app.INFO: Na de wisseling (CET) [] []
+[2026-10-25T00:30:00.000000Z] request.INFO: UTC-tijd zonder lokale aanduiding [] []
+[2026-10-25 02:30:00] app.INFO: Monolog 1 zonder tijdzone [] []

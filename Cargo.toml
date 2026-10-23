@@ -20,9 +20,11 @@ name = "symlog"
 path = "src/main.rs"
 
 [dependencies]
+jiff = "0.2.38"
 lru = "0.19.0"
 memchr = "2.8.3"
 memmap2 = { version = "0.9.12", optional = true }
+regex = "1.13.1"
 serde_json = "1.0.154"
 
 [dev-dependencies]

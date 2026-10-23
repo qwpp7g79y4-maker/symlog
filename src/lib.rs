@@ -2,13 +2,16 @@
 //!
 //! T1 legde het repo-skelet vast, T2 voegde [`reader`] toe (offset-index en lazy
 //! records). T3 voegt [`model`] (gedeelde recordtypes) en [`parse`] (de
-//! LineFormatter-parser) toe, zie `blueprint.md`. Multiline/stacktraces, de
-//! JsonFormatter, de Raw-terugval, tijdzones/filters, TUI, editor en follow volgen in
-//! latere taken.
+//! LineFormatter-parser) toe, zie `blueprint.md`. T4/T5/T6 breidden [`parse`] uit met
+//! multiline-records, de JsonFormatter en de Raw-terugval. T7 voegt [`time`]
+//! (tijdzone-weergave) en [`filter`] (kanaal/niveau/zoeken) toe. TUI, editor en follow
+//! volgen in latere taken.
 
+pub mod filter;
 pub mod model;
 pub mod parse;
 pub mod reader;
+pub mod time;
 
 /// Placeholder tot er een CLI-laag is die dit toont; bestaat zodat de crate een
 /// lib-test heeft om CI tegen te draaien (T1).

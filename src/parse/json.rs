@@ -31,7 +31,7 @@
 //! openende `{` op de eerste regel staat, heeft geen `"datetime"`-veld op die regel
 //! en wordt dus nooit als recordstart herkend (zie `tests/json_golden.rs`).
 
-use crate::model::{Level, Record};
+use crate::model::{Level, Record, Ts};
 use crate::parse::trace;
 use serde_json::Value;
 
@@ -61,9 +61,15 @@ pub fn parse_json(line: &str) -> Option<Record> {
         .get("exception")
         .map(trace::frames_from_exception_json)
         .unwrap_or_default();
+    // In tegenstelling tot de LineFormatter-kant valideert JsonFormatter het
+    // `datetime`-veld niet op formaat (zie de moduledoc hierboven), dus `Ts::parse`
+    // kan hier wél `None` opleveren bij een vreemde waarde; `datetime` zelf blijft dan
+    // gewoon de ruwe tekst (task.md T7).
+    let ts = Ts::parse(&datetime);
 
     Some(Record {
         datetime,
+        ts,
         channel,
         level,
         message,
@@ -236,6 +242,28 @@ mod tests {
         .expect("parses crlf");
         assert_eq!(lf.message, "m");
         assert_eq!(crlf.message, "m");
+    }
+
+    #[test]
+    fn parses_ts_from_a_well_formed_datetime() {
+        let record = parse_json(
+            r#"{"message":"boot","level":100,"channel":"app","datetime":"2026-01-15T10:00:12.000000+01:00"}"#,
+        )
+        .expect("parses");
+        assert!(record.ts.is_some());
+    }
+
+    #[test]
+    fn ts_is_none_for_a_datetime_that_is_not_one_of_the_three_known_shapes() {
+        // Task.md T7: JsonFormatter valideert `datetime` niet op formaat (anders dan
+        // LineFormatter), dus een vreemde waarde parseert nog steeds als `Record`, met
+        // `ts: None` in plaats van een paniek of een stille UTC-aanname.
+        let record = parse_json(
+            r#"{"message":"boot","level":100,"channel":"app","datetime":"niet een datum"}"#,
+        )
+        .expect("parses ondanks onbruikbare datetime");
+        assert_eq!(record.datetime, "niet een datum");
+        assert!(record.ts.is_none());
     }
 
     #[test]

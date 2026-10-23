@@ -21,7 +21,7 @@
 //! LineFormatter-string) levert `None` op. Task.md T3 "Blijft": zulke regels vallen
 //! terug op "onbekend formaat"; die terugval zelf (een `Raw`-record) komt in T6.
 
-use crate::model::{Level, Record};
+use crate::model::{Level, Record, Ts};
 use crate::parse::trace;
 
 /// Parseert één logrecord (header-regel plus eventuele vervolgregels, zie de
@@ -55,9 +55,13 @@ pub fn parse_line(block: &str) -> Option<Record> {
     let message = before_context.strip_suffix(' ')?;
 
     let frames = trace::frames_from_message(message);
+    // Altijd `Some` hier: `looks_like_datetime` hierboven heeft de tekst al op
+    // precies deze drie varianten gecontroleerd (task.md T7, zie `Ts::parse`).
+    let ts = Ts::parse(datetime);
 
     Some(Record {
         datetime: datetime.to_string(),
+        ts,
         channel: channel.to_string(),
         level,
         message: message.to_string(),
