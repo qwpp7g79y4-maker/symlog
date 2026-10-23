@@ -45,3 +45,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
+
+  # task.md T15 "Klaar als": "geen persoonsnamen of handles in de repo (`rg` op een
+  # lijst verboden woorden als CI-stap)". Gebruikt `grep` (geen extra tool nodig op
+  # de runner) over precies de ingecheckte bestanden (`git ls-files`), met de lijst
+  # uit `docs/forbidden-words.txt`.
+  forbidden-words:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          patterns=$(mktemp)
+          grep -vE '^(#|[[:space:]]*$)' docs/forbidden-words.txt > "$patterns"
+          if git ls-files -z \
+              | grep -zv '^docs/forbidden-words\.txt$' \
+              | xargs -0 grep -niE -f "$patterns" --; then
+            echo "Verboden woord gevonden (zie hierboven); verwijder het uit het publieke bestand."
+            exit 1
+          fi

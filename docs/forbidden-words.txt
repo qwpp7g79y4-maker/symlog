@@ -1,0 +1,17 @@
+# Verboden-woordenlijst (task.md T15 "Doet": "geen persoonsnamen of handles in de
+# repo (`rg` op een lijst verboden woorden als CI-stap)").
+#
+# Eén patroon per regel, hoofdletterongevoelig (`grep -i -E -f`). Regels die met `#`
+# beginnen en lege regels worden overgeslagen door het script in
+# `.github/workflows/ci.yml` (job `forbidden-words`), niet door `grep` zelf — vandaar
+# de `grep -v` daar. De job doorzoekt alleen `git ls-files` (de werkelijke repo-inhoud,
+# niet lokale, niet-ingecheckte bestanden); dit bestand zelf staat op de uitsluitlijst.
+
+pep_ai
+pepai
+icloud\.com
+claude
+anthropic
+bitboi
+aanspreekpunt
+brug-prompts

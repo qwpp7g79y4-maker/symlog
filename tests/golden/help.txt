@@ -1,0 +1,14 @@
+Usage: symlog [OPTIONS] <PATH>
+
+Arguments:
+  <PATH>  Pad naar het logbestand
+
+Options:
+  -f, --follow              Blijf het bestand volgen (`tail -f`), ook als het nog niet bestaat
+      --level <LEVEL>       Niveaufilter: een lijst (`error,critical`) of een ondergrens (`>=warning`)
+      --channel <CHANNELS>  Kanaalfilter (herhaalbaar); `!kanaal` sluit dat kanaal juist uit
+      --plain               Forceer plain-uitvoer, ook op een tty
+      --no-color            Geen kleur, ook op een tty
+      --tui                 Forceer de TUI; zonder tty op stdout geeft dit exit 3
+  -h, --help                Print help
+  -V, --version             Print version

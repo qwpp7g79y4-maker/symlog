@@ -51,7 +51,7 @@ struct Cli {
     /// Geen kleur, ook op een tty.
     #[arg(long)]
     no_color: bool,
-    /// Forceer de TUI; zonder tty op stdout geeft dit exit 3 (task.md T13 "Doet").
+    /// Forceer de TUI; zonder tty op stdout geeft dit exit 3.
     #[arg(long)]
     tui: bool,
 }
