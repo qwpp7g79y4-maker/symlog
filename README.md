@@ -34,7 +34,13 @@ netwerkverkeer.
   record, frames ingesprongen, kleur alleen op een echte tty en zonder `NO_COLOR`.
 - Is aantoonbaar read-only: een testrun op alle fixtures met `chmod a-w` laat mtimes en
   hashes ongewijzigd, en een `strace`-test op Linux CI faalt als het proces ooit een
-  logbestand met schrijfrechten of een netwerk-socket opent.
+  logbestand met schrijfrechten of een netwerk-socket opent. Die test is één keer
+  handmatig uitgeprobeerd met een bewust kapotte variant van `Reader::open`
+  (`OpenOptions::new().read(true).write(true).open(...)` in plaats van `File::open`):
+  check 1 faalde toen op de hash-vergelijking. De open zelf schrijft niets, maar laat
+  zien dat de test een schrijfbare handle wél zou opmerken zodra er geschreven wordt.
+  Die variant staat niet in de broncode; om de proef te herhalen, open het bestand in
+  `Reader::open` tijdelijk op die manier.
 
 ## Installatie
 

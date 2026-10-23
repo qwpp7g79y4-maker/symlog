@@ -121,7 +121,7 @@ pub fn outcome_for(path: &Path, classification: Classification) -> Outcome {
     match classification {
         Classification::Missing => Outcome::Exit {
             message: format!(
-                "{p} bestaat niet; draait de app in een container? gebruik --map of geef het juiste pad",
+                "{p} bestaat niet; draait de app in een container? geef het juiste pad op",
                 p = path.display()
             ),
             code: EXIT_MISSING,
@@ -219,14 +219,14 @@ mod tests {
     #[test]
     fn outcome_for_missing_exits_with_a_hint_and_code_1() {
         let path = Path::new("/tmp/does-not-matter.log");
-        let outcome = outcome_for(path, Classification::Missing);
-        match outcome {
-            Outcome::Exit { message, code } => {
-                assert_eq!(code, EXIT_MISSING);
-                assert!(message.contains("bestaat niet"));
+        assert_eq!(
+            outcome_for(path, Classification::Missing),
+            Outcome::Exit {
+                message: "/tmp/does-not-matter.log bestaat niet; draait de app in een container? geef het juiste pad op"
+                    .to_string(),
+                code: EXIT_MISSING,
             }
-            other => panic!("verwacht Outcome::Exit, kreeg {other:?}"),
-        }
+        );
     }
 
     #[test]

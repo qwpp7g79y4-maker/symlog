@@ -1,3 +1,7 @@
+#![warn(clippy::unwrap_used)]
+// De testharness compileert deze crate met `cfg(test)`; unwrap hoort daar wel.
+#![cfg_attr(test, allow(clippy::unwrap_used))]
+
 //! symlog: terminal-logviewer voor Symfony/Monolog-logs (read-only, geen netwerk).
 //!
 //! T1 legde het repo-skelet vast, T2 voegde [`reader`] toe (offset-index en lazy
