@@ -79,17 +79,109 @@ impl RecordIndex {
     fn mark_done(&self) {
         self.done.store(true, Ordering::Release);
     }
+
+    /// Leegt de index volledig (task.md T10, "Afkappen"/"Rotatie": "index en cache
+    /// leeg" / "index vanaf 0"). Gebruikt door [`crate::follow`] als het gevolgde
+    /// bestand afgekapt is of (voor een nieuwe generatie na rotatie) opnieuw vanaf
+    /// offset 0 begint; niet gebruikt door de eenmalige achtergrondindexer van
+    /// [`crate::reader::Reader`], die geen reden heeft om te resetten.
+    pub fn reset(&self) {
+        self.offsets.write().expect("index-lock vergiftigd").clear();
+        self.bytes_scanned.store(0, Ordering::Release);
+        self.done.store(false, Ordering::Release);
+    }
+}
+
+/// Scant een logbestand incrementeel, blok voor blok, en publiceert record-
+/// startoffsets in een [`RecordIndex`]. [`build_index`] voert dit in één keer tot EOF
+/// uit (task.md T2); [`crate::follow`] (T10) houdt in plaats daarvan zelf een
+/// `IndexScanner` vast en roept [`IndexScanner::feed`] telkens aan zodra het gevolgde
+/// bestand gegroeid is, zonder steeds vanaf offset 0 opnieuw te beginnen.
+///
+/// Een regel kan zelf over een bloklezing/`feed`-aanroep heen lopen (bijvoorbeeld een
+/// lange stacktrace-regel, of de datetime-kop precies op de blokgrens); `carry` houdt
+/// de bytes van de huidige, nog niet afgesloten regel vast totdat de afsluitende `\n`
+/// (of EOF, via [`IndexScanner::finish`]) gevonden is, zodat [`is_record_header`]
+/// altijd de volledige regel ziet en niet een toevallig stukje ervan.
+#[derive(Debug, Default)]
+pub struct IndexScanner {
+    pos: u64,
+    line_start: u64,
+    carry: Vec<u8>,
+    seen_any_byte: bool,
+}
+
+impl IndexScanner {
+    /// Een nieuwe scanner die bij offset 0 van een (nog lege) bron begint.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Aantal bytes dat tot nu toe aan [`IndexScanner::feed`] is gegeven, inclusief een
+    /// eventuele nog niet afgesloten staartregel (zie [`IndexScanner::pending_tail`]).
+    /// Dit is de volgende offset waar een toekomstige `feed`-aanroep rechtstreeks op
+    /// moet aansluiten (geen gat, geen overlap).
+    pub fn bytes_read(&self) -> u64 {
+        self.pos
+    }
+
+    /// Bytes van de huidige, nog niet door een `\n` afgesloten regel (leeg als het
+    /// bestand op dit moment op een regelgrens eindigt). Task.md T10 "Doet": deze
+    /// bytes worden pas een zichtbaar record zodra de afsluitende `\n` arriveert, of na
+    /// een timeout als voorlopige Raw-staart (zie [`crate::follow`]).
+    pub fn pending_tail(&self) -> &[u8] {
+        &self.carry
+    }
+
+    /// Verwerkt `chunk`, die rechtstreeks aansluit op alles wat deze scanner al eerder
+    /// gezien heeft (geen gat, geen overlap), en publiceert nieuwe record-startoffsets
+    /// in `index`.
+    pub fn feed(&mut self, index: &RecordIndex, chunk: &[u8]) {
+        let mut batch = Vec::new();
+        if !self.seen_any_byte && !chunk.is_empty() {
+            // Offset 0 is altijd een recordstart, ongeacht de inhoud (task.md T2
+            // "Blijft"); T6 toont zo'n record evt. als Raw als de kop niet klopt.
+            batch.push(0);
+            self.seen_any_byte = true;
+        }
+
+        let mut chunk_pos = 0usize;
+        for nl in memchr_iter(b'\n', chunk) {
+            self.carry.extend_from_slice(&chunk[chunk_pos..nl]);
+            // `line_start != 0` slaat alleen de allereerste regel over: offset 0 is al
+            // hierboven gepubliceerd en mag niet nogmaals in `batch` terechtkomen.
+            if self.line_start != 0 && is_record_header(&self.carry) {
+                batch.push(self.line_start);
+            }
+            self.line_start = self.pos + nl as u64 + 1;
+            self.carry.clear();
+            chunk_pos = nl + 1;
+        }
+        self.carry.extend_from_slice(&chunk[chunk_pos..]);
+        self.pos += chunk.len() as u64;
+        index.extend(&batch, self.pos);
+    }
+
+    /// Sluit de scan definitief af: de laatste regel zonder afsluitende `\n` (als die
+    /// er is) is nu compleet (echte EOF) en kan dus alsnog op een geldige recordkop
+    /// gecontroleerd worden. Na `finish` mag deze scanner niet meer verder gevoed
+    /// worden (gebruikt door [`build_index`] bij bestands-EOF en door
+    /// [`crate::follow`] bij het afsluiten van een afgesloten generatie, bijvoorbeeld
+    /// na rotatie).
+    pub fn finish(&mut self, index: &RecordIndex) {
+        if !self.carry.is_empty() && self.line_start != 0 && is_record_header(&self.carry) {
+            index.extend(&[self.line_start], self.pos);
+        }
+        index.mark_done();
+    }
 }
 
 /// Scant `reader` in blokken van `block_size` bytes en publiceert record-startoffsets
 /// in `index`. Werkt op elke `Read`-bron (bestand of, in tests, een `Cursor`), zodat
-/// de blokgrens-logica deterministisch getest kan worden.
-///
-/// Een regel kan zelf over een bloklezing heen lopen (bijvoorbeeld een lange
-/// stacktrace-regel, of de datetime-kop precies op de blokgrens); `carry` houdt de
-/// bytes van de huidige, nog niet afgesloten regel vast totdat de afsluitende `\n`
-/// (of EOF) gevonden is, zodat [`is_record_header`] altijd de volledige regel ziet en
-/// niet een toevallig stukje ervan.
+/// de blokgrens-logica deterministisch getest kan worden. Dunne laag boven
+/// [`IndexScanner`]: leest tot EOF in één aanroep (task.md T2), in tegenstelling tot
+/// [`crate::follow`] dat de scanner tussen afzonderlijke groei-aanroepen in leven
+/// houdt.
 pub fn build_index<R: Read>(
     mut reader: R,
     index: &RecordIndex,
@@ -97,49 +189,17 @@ pub fn build_index<R: Read>(
 ) -> io::Result<()> {
     assert!(block_size > 0, "block_size moet positief zijn");
     let mut buf = vec![0u8; block_size];
-    let mut pos: u64 = 0;
-    let mut line_start: u64 = 0;
-    let mut carry: Vec<u8> = Vec::new();
-    let mut seen_any_byte = false;
+    let mut scanner = IndexScanner::new();
 
     loop {
         let n = reader.read(&mut buf)?;
         if n == 0 {
             break;
         }
-        let chunk = &buf[..n];
-        let mut batch = Vec::new();
-        if !seen_any_byte {
-            // Offset 0 is altijd een recordstart, ongeacht de inhoud (task.md T2
-            // "Blijft"); T6 toont zo'n record evt. als Raw als de kop niet klopt.
-            batch.push(0);
-            seen_any_byte = true;
-        }
-
-        let mut chunk_pos = 0usize;
-        for nl in memchr_iter(b'\n', chunk) {
-            carry.extend_from_slice(&chunk[chunk_pos..nl]);
-            // `line_start != 0` slaat alleen de allereerste regel over: offset 0 is al
-            // hierboven gepubliceerd en mag niet nogmaals in `batch` terechtkomen.
-            if line_start != 0 && is_record_header(&carry) {
-                batch.push(line_start);
-            }
-            line_start = pos + nl as u64 + 1;
-            carry.clear();
-            chunk_pos = nl + 1;
-        }
-        carry.extend_from_slice(&chunk[chunk_pos..]);
-        pos += n as u64;
-        index.extend(&batch, pos);
+        scanner.feed(index, &buf[..n]);
     }
 
-    // De laatste regel van het bestand heeft geen afsluitende `\n`; die is pas nu
-    // compleet (EOF) en kan dus pas nu op een geldige recordkop gecontroleerd worden.
-    if !carry.is_empty() && line_start != 0 && is_record_header(&carry) {
-        index.extend(&[line_start], pos);
-    }
-
-    index.mark_done();
+    scanner.finish(index);
     Ok(())
 }
 
@@ -359,5 +419,75 @@ mod tests {
             offsets_of(&content, DEFAULT_BLOCK_SIZE),
             vec![0, second_start]
         );
+    }
+
+    #[test]
+    fn index_scanner_fed_in_separate_calls_matches_build_index() {
+        // Task.md T10: `IndexScanner` is wat `crate::follow` tussen groei-aanroepen in
+        // levend houdt, dus moet het feeden in losse stukjes (zoals follow dat doet, één
+        // stuk per gedetecteerde groei) exact dezelfde offsets geven als één
+        // `build_index`-aanroep op dezelfde inhoud in zijn geheel.
+        let mut content = H0.to_vec();
+        content.extend_from_slice(b" a\ncontinuation\n");
+        let second_start = content.len() as u64;
+        content.extend_from_slice(H1);
+        content.extend_from_slice(b" b\n");
+
+        let whole = offsets_of(&content, DEFAULT_BLOCK_SIZE);
+        assert_eq!(whole, vec![0, second_start]);
+
+        let index = RecordIndex::new();
+        let mut scanner = IndexScanner::new();
+        // Groei in drie willekeurige, ongelijke stukken, zoals opeenvolgende
+        // `tick()`-aanroepen tijdens follow elk een ander aantal nieuwe bytes zouden
+        // kunnen aanleveren.
+        let mid = second_start as usize + 2;
+        scanner.feed(&index, &content[..5]);
+        scanner.feed(&index, &content[5..mid]);
+        scanner.feed(&index, &content[mid..]);
+        scanner.finish(&index);
+
+        let offsets: Vec<u64> = (0..index.len()).filter_map(|i| index.offset(i)).collect();
+        assert_eq!(offsets, whole);
+        assert!(index.is_done());
+    }
+
+    #[test]
+    fn index_scanner_pending_tail_is_empty_only_on_a_line_boundary() {
+        let index = RecordIndex::new();
+        let mut scanner = IndexScanner::new();
+        let first_line = b"[2026-01-01 00:00:00] a.INFO: compleet\n";
+        scanner.feed(&index, first_line);
+        assert!(scanner.pending_tail().is_empty());
+        assert_eq!(scanner.bytes_read(), first_line.len() as u64);
+
+        scanner.feed(&index, b"[2026-01-01 00:00:01] a.INFO: onvolledig");
+        assert_eq!(
+            scanner.pending_tail(),
+            b"[2026-01-01 00:00:01] a.INFO: onvolledig"
+        );
+        assert_eq!(index.len(), 1); // de onvolledige regel heeft nog geen eigen offset
+
+        scanner.feed(&index, b"\n");
+        assert!(scanner.pending_tail().is_empty());
+        assert_eq!(index.len(), 2); // nu wel: de `\n` maakte de regel compleet
+    }
+
+    #[test]
+    fn reset_clears_offsets_bytes_scanned_and_done() {
+        let index = RecordIndex::new();
+        build_index(
+            Cursor::new(b"[2026-01-01 00:00:00] a.INFO: one\n".as_slice()),
+            &index,
+            DEFAULT_BLOCK_SIZE,
+        )
+        .expect("build_index");
+        assert_eq!(index.len(), 1);
+        assert!(index.is_done());
+
+        index.reset();
+        assert_eq!(index.len(), 0);
+        assert_eq!(index.bytes_scanned(), 0);
+        assert!(!index.is_done());
     }
 }

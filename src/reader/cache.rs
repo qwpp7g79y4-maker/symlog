@@ -38,6 +38,13 @@ impl RecordCache {
             .expect("cache-lock vergiftigd")
             .put(offset, bytes);
     }
+
+    /// Verwijdert alle gecachte records (task.md T10, "Afkappen"): de offsets van een
+    /// afgekapt en opnieuw ingedeelde bestand slaan niet meer op de oude inhoud, dus
+    /// elke eerder gecachte sleutel zou anders stale bytes teruggeven.
+    pub fn clear(&self) {
+        self.inner.lock().expect("cache-lock vergiftigd").clear();
+    }
 }
 
 #[cfg(test)]
@@ -61,5 +68,15 @@ mod tests {
         // Capaciteit 1: de oudste sleutel (0) is verdrongen.
         assert_eq!(cache.get(0), None);
         assert!(cache.get(1).is_some());
+    }
+
+    #[test]
+    fn clear_removes_every_entry() {
+        let cache = RecordCache::with_capacity(4);
+        cache.insert(0, Arc::from(b"a".as_slice()));
+        cache.insert(1, Arc::from(b"b".as_slice()));
+        cache.clear();
+        assert_eq!(cache.get(0), None);
+        assert_eq!(cache.get(1), None);
     }
 }

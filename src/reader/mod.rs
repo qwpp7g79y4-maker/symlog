@@ -104,20 +104,34 @@ impl Reader {
     /// onbekend is (het laatste record). Gebruikt `read_at` (pread) zodat dit nooit
     /// de leespositie van andere lezers van hetzelfde bestand verstoort.
     fn read_record_at(&self, start: u64, end: Option<u64>) -> io::Result<Vec<u8>> {
-        match end {
-            Some(end) => {
-                let len = (end - start) as usize;
-                let mut buf = vec![0u8; len];
-                self.file.read_exact_at(&mut buf, start)?;
-                Ok(buf)
-            }
-            None => {
-                let mut tail = self.file.try_clone()?;
-                tail.seek(SeekFrom::Start(start))?;
-                let mut buf = Vec::new();
-                tail.read_to_end(&mut buf)?;
-                Ok(buf)
-            }
+        read_record_at(&self.file, start, end)
+    }
+}
+
+/// Leest de bytes van `start` tot `end` (exclusief) uit `file`, of tot EOF als `end`
+/// onbekend is. Vrije functie (niet een methode op [`Reader`]) zodat
+/// [`crate::follow`] (T10) dezelfde pread-gebaseerde leeslogica hergebruikt voor zijn
+/// eigen, per generatie bijgehouden bestandshandles.
+///
+/// Geeft een `io::Error` terug (nooit een paniek) als `file` intussen minder bytes
+/// bevat dan `end` verwacht, bijvoorbeeld door afkappen tussen het bepalen van de
+/// recordgrenzen en deze lezing (task.md T10, "Blijft": "ook buiten follow wordt
+/// afkappen tijdens het lezen gedetecteerd ... en netjes afgehandeld in plaats van
+/// een panic").
+pub(crate) fn read_record_at(file: &File, start: u64, end: Option<u64>) -> io::Result<Vec<u8>> {
+    match end {
+        Some(end) => {
+            let len = (end - start) as usize;
+            let mut buf = vec![0u8; len];
+            file.read_exact_at(&mut buf, start)?;
+            Ok(buf)
+        }
+        None => {
+            let mut tail = file.try_clone()?;
+            tail.seek(SeekFrom::Start(start))?;
+            let mut buf = Vec::new();
+            tail.read_to_end(&mut buf)?;
+            Ok(buf)
         }
     }
 }
@@ -223,6 +237,33 @@ mod tests {
         assert_eq!(
             &*reader.record_bytes(1).unwrap().unwrap(),
             b"[2026-01-01 00:00:01] a.INFO: next\n"
+        );
+    }
+
+    #[test]
+    fn truncation_during_read_is_an_error_not_a_panic() {
+        // Task.md T10 "Blijft": "ook buiten follow wordt afkappen tijdens het lezen
+        // gedetecteerd (read geeft minder bytes dan de index verwacht) en netjes
+        // afgehandeld in plaats van een panic." De index verwacht hier twee records,
+        // maar het bestand is na het indexeren afgekapt tot vóór het eerste record is
+        // afgelopen: de bytes die de index belooft (tot offset[1]) bestaan niet meer.
+        let (_dir, path) = write_temp_log(
+            b"[2026-01-01 00:00:00] a.INFO: first record, lang genoeg om af te kappen\n\
+              [2026-01-01 00:00:01] a.INFO: second\n",
+        );
+        let mut reader = Reader::open(&path).expect("open");
+        reader.wait_until_indexed().expect("index");
+        assert_eq!(reader.record_count(), 2);
+
+        File::create(&path)
+            .expect("open voor afkappen")
+            .set_len(10)
+            .expect("afkappen tot 10 bytes");
+
+        let result = reader.record_bytes(0);
+        assert!(
+            result.is_err(),
+            "minder bytes dan de index verwacht moet een Err geven, geen paniek"
         );
     }
 }
