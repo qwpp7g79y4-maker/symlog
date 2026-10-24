@@ -655,6 +655,38 @@ mod tests {
     }
 
     #[test]
+    fn a_key_name_that_is_only_a_suffix_of_a_longer_word_is_not_masked() {
+        // `at_boundary` moet de vorige byte bekijken: "my" + "secret" is geen los
+        // sleutelwoord, dus mag niet maskeren alsof het `secret=` was.
+        assert_eq!(redact_secrets("mysecret=val"), "mysecret=val");
+        assert_eq!(redact_secrets("subtoken: val"), "subtoken: val");
+        assert_eq!(redact_secrets("xpasswd=hunter2"), "xpasswd=hunter2");
+    }
+
+    #[test]
+    fn an_assignment_without_a_value_is_left_unchanged() {
+        assert_eq!(redact_secrets("token="), "token=");
+        assert_eq!(redact_secrets("token=,"), "token=,");
+        assert_eq!(redact_secrets("token=\n"), "token=\n");
+    }
+
+    #[test]
+    fn an_unterminated_quoted_value_is_masked_to_the_end_of_the_string() {
+        let input = r#"password="still open"#;
+        assert_eq!(redact_secrets(input), r#"password="***"#);
+        assert!(!redact_secrets(input).contains("still open"));
+    }
+
+    #[test]
+    fn a_jwt_directly_preceded_by_a_dot_is_not_masked_in_plain_text() {
+        // `at_jwt_boundary` wijst een `.` vlak vóór `eyJ` af: dat hoort bij een
+        // grotere dotted-tekst (bv. een versienummer), niet bij een los token.
+        let input = format!("v1.2.{JWT}");
+        assert_eq!(redact_secrets(&input), input);
+        assert_eq!(for_display(&input, true), input);
+    }
+
+    #[test]
     fn for_display_can_leave_the_original_value() {
         let input = "password=hunter2";
         assert_eq!(for_display(input, true), "password=***");
