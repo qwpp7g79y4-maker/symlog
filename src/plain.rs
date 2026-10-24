@@ -15,9 +15,10 @@
 //! `Stack trace:`- en `[previous exception]`-regels); die blijft wel zichtbaar in de
 //! TUI (task.md T8's detailpaneel toont `message` in zijn geheel).
 //!
-//! [`ParsedRecord::Raw`] gebruikt gewoon zijn eigen [`crate::parse::raw::RawRecord::to_plain_line`]
-//! (ongewijzigd, task.md T6): een kapotte regel heeft geen frames en geen kanaal/
-//! niveau om los te koppen, dus er is niets aan toe te voegen.
+//! [`ParsedRecord::Raw`] krijgt dezelfde markering als
+//! [`crate::parse::raw::RawRecord::to_plain_line`] (task.md T6): een kapotte regel heeft
+//! geen frames en geen kanaal/niveau om los te koppen. Geheimen in die tekst worden
+//! hier alsnog gemaskeerd; `to_plain_line` zelf blijft de ongemaskeerde golden-vorm.
 //!
 //! [`PlainPrinter`] is de incrementele kern die zowel het eenmalige dump (geen
 //! `--follow`) als de streaminglus (`--follow` streamt, task.md T13 "Doet") voedt: hij
@@ -28,7 +29,7 @@
 use crate::filter::FilterSpec;
 use crate::follow::{Follower, Separator, SeparatorKind};
 use crate::model::{Frame, Level, Record};
-use crate::parse::raw::{sanitize_for_display, ParsedRecord};
+use crate::parse::raw::ParsedRecord;
 use std::io::{self, Write};
 
 /// ANSI SGR-kleurcode per niveau (task.md T13 "Doet": "kleur alleen bij TTY en zonder
@@ -78,18 +79,18 @@ fn first_line(message: &str) -> &str {
     message.split('\n').next().unwrap_or(message)
 }
 
-fn render_record(record: &Record, colors_enabled: bool) -> String {
-    let header = sanitize_for_display(&format!(
+fn render_record(record: &Record, colors_enabled: bool, redact: bool) -> String {
+    let header = format!(
         "[{}] {}.{}: {}",
-        record.datetime,
-        record.channel,
+        crate::redact::for_display(&record.datetime, redact),
+        crate::redact::for_display(&record.channel, redact),
         record.level.as_str(),
-        first_line(&record.message)
-    ));
+        crate::redact::for_display(first_line(&record.message), redact)
+    );
     let mut text = colorize(&header, record.level, colors_enabled);
     for (i, frame) in record.frames.iter().enumerate() {
         text.push('\n');
-        text.push_str(&sanitize_for_display(&frame_line(i, frame)));
+        text.push_str(&crate::redact::for_display(&frame_line(i, frame), redact));
     }
     text
 }
@@ -98,9 +99,17 @@ fn render_record(record: &Record, colors_enabled: bool) -> String {
 /// "Doet"). Bevat geen afsluitende `\n`; de aanroeper (bijvoorbeeld [`PlainPrinter`])
 /// voegt die toe.
 pub fn render_line(parsed: &ParsedRecord, colors_enabled: bool) -> String {
+    render_line_with(parsed, colors_enabled, true)
+}
+
+fn render_line_with(parsed: &ParsedRecord, colors_enabled: bool, redact: bool) -> String {
     match parsed {
-        ParsedRecord::Record(record) => render_record(record, colors_enabled),
-        ParsedRecord::Raw(raw) => raw.to_plain_line(),
+        ParsedRecord::Record(record) => render_record(record, colors_enabled, redact),
+        ParsedRecord::Raw(raw) => format!(
+            "RAW[{}] {}",
+            raw.reason.as_str(),
+            crate::redact::for_display(&raw.text, redact)
+        ),
     }
 }
 
@@ -117,15 +126,33 @@ fn separator_line(kind: SeparatorKind) -> &'static str {
 /// werkt ook in plain (streamt)"). Onthoudt tot welk (doorlopend genummerd) record en
 /// welke scheidingsregel al geschreven zijn, zodat herhaald aanroepen na een nieuwe
 /// `tick()` alleen het nieuwe stuk schrijft, nooit dubbel.
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct PlainPrinter {
     next_record: usize,
     next_separator: usize,
+    /// Standaard aan. `--no-redact` zet dit uit; het bronbestand blijft hoe dan ook
+    /// onaangeroerd.
+    redact: bool,
+}
+
+impl Default for PlainPrinter {
+    fn default() -> Self {
+        Self {
+            next_record: 0,
+            next_separator: 0,
+            redact: true,
+        }
+    }
 }
 
 impl PlainPrinter {
     pub fn new() -> PlainPrinter {
         PlainPrinter::default()
+    }
+
+    /// Zet maskeren aan of uit voor de volgende `flush`-aanroepen.
+    pub fn set_redact(&mut self, redact: bool) {
+        self.redact = redact;
     }
 
     /// Schrijft alle records en scheidingsregels die sinds de vorige aanroep nieuw
@@ -162,7 +189,11 @@ impl PlainPrinter {
             };
             let parsed = crate::parse::parse_record_lossy(&bytes);
             if spec.matches_parsed(&parsed) {
-                writeln!(out, "{}", render_line(&parsed, colors_enabled))?;
+                writeln!(
+                    out,
+                    "{}",
+                    render_line_with(&parsed, colors_enabled, self.redact)
+                )?;
             }
             self.next_record += 1;
         }

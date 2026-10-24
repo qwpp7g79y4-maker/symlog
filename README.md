@@ -53,7 +53,7 @@ Nog niet beschikbaar via `cargo install symlog` (crates.io-publicatie volgt late
 ## Gebruik
 
 ```
-symlog <PAD> [-f|--follow] [--level LEVEL] [--channel KANAAL]... [--plain] [--no-color] [--tui]
+symlog <PAD> [-f|--follow] [--level LEVEL] [--channel KANAAL]... [--plain] [--no-color] [--no-redact] [--tui]
 ```
 
 `<PAD>` is verplicht; er is geen automatische `var/log/...`-standaardwaarde en geen
@@ -123,9 +123,24 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 | `--channel <KANAAL>` | kanaalfilter, herhaalbaar; `!kanaal` sluit dat kanaal juist uit |
 | `--plain` | forceer plain-uitvoer, ook op een tty |
 | `--no-color` | geen kleur, ook op een tty |
+| `--no-redact` | toon geheimen ongemaskeerd; standaard worden ze `***` |
 | `--tui` | forceer de TUI; zonder tty op stdout geeft dit exit 3 |
 | `-h`, `--help` | help |
 | `-V`, `--version` | versie |
+
+## Geheimen
+
+Standaard vervangt symlog in de plain-uitvoer en in de TUI (lijst, zoekresultaten en
+detail) deze waarden door `***`:
+
+- de waarde na `password`, `passwd`, `token`, `secret`, `api_key` en `apikey`
+  (`=` of `:`, hoofdletterongevoelig, ook als JSON-veld);
+- het token na `Authorization: Bearer`;
+- sleutels die beginnen met `sk_live_` of `sk_test_`;
+- AWS-toegangssleutels `AKIA` plus 16 hoofdletters of cijfers.
+
+`--no-redact` toont de oorspronkelijke tekst. Het logbestand op schijf blijft
+ongewijzigd.
 
 ## Exitcodes
 
@@ -203,6 +218,7 @@ bestand noemen alleen gedrag dat echt aangesloten is.
 | Leeg bestand: exit 0; ontbrekend bestand: exit 1; map: exit 2; `--tui` zonder tty: exit 3; geen leesrechten: exit 4 | F14 | `tests/startup_cli.rs`, `tests/plain_cli.rs::tui_flag_without_a_tty_exits_three` |
 | Read-only: geen schrijf- of netwerkoproepen | alle fixtures | `tests/read_only_proof.rs` |
 | `--help`-tekst | — | `tests/help_golden.rs` |
+| Geheimen in plain-uitvoer en TUI worden `***`; `--no-redact` toont het origineel | — | `tests/redact.rs` |
 
 ## Ontwikkelen
 

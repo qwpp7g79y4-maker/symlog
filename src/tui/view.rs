@@ -1,8 +1,8 @@
 //! Tekent [`App`] op een [`ratatui::Frame`] (task.md T8; blueprint.md `tui::view`):
 //! lijstweergave, detailpaneel, kiezers en help-overlay.
 //!
-//! Elke regel tekst gaat eerst door [`sanitize_for_display`] (task.md T6: "Dit geldt
-//! voor elke weergegeven tekst") en wordt daarna met [`crate::tui::width`] grafeemveilig
+//! Elke regel logtekst gaat eerst door [`crate::redact::for_display`] (saniteren van
+//! stuurtekens, task.md T6, en maskeren van geheimen) en wordt daarna met [`crate::tui::width`] grafeemveilig
 //! afgekapt tot de kolombreedte die er nog over is (task.md T8 "Doet": emoji/CJK = 2
 //! kolommen, combining = 0, nooit midden in een grafeem afkappen); tabs en andere
 //! besturingstekens worden door die sanering al vóór de breedteberekening vervangen
@@ -19,7 +19,8 @@
 use super::app::{App, Mode, Picker};
 use super::width::{pad_to_width, truncate_to_width};
 use crate::model::{self, Level};
-use crate::parse::raw::{sanitize_for_display, ParsedRecord};
+use crate::parse::raw::ParsedRecord;
+use crate::redact::for_display;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
@@ -77,19 +78,20 @@ fn record_line(
     selected: bool,
     width: usize,
     colors_enabled: bool,
+    redact: bool,
 ) -> Line<'static> {
     let line = match parsed {
         ParsedRecord::Record(record) => {
             let time = pad_to_width(
-                &sanitize_for_display(time_column(&record.datetime)),
+                &for_display(time_column(&record.datetime), redact),
                 TIME_WIDTH,
             );
             let level_text = pad_to_width(record.level.as_str(), LEVEL_WIDTH);
-            let channel = pad_to_width(&sanitize_for_display(&record.channel), CHANNEL_WIDTH);
+            let channel = pad_to_width(&for_display(&record.channel, redact), CHANNEL_WIDTH);
             let fixed_width = TIME_WIDTH + LEVEL_WIDTH + CHANNEL_WIDTH + COLUMN_GAPS;
             let remaining = width.saturating_sub(fixed_width);
             let first_line = record.message.split('\n').next().unwrap_or("");
-            let message = truncate_to_width(&sanitize_for_display(first_line), remaining);
+            let message = truncate_to_width(&for_display(first_line, redact), remaining);
             Line::from(vec![
                 Span::raw(format!("{time} ")),
                 Span::styled(level_text, level_style(record.level, colors_enabled)),
@@ -107,7 +109,7 @@ fn record_line(
             let marker = pad_to_width(&format!("RAW[{}]", raw.reason.as_str()), fixed_width);
             let remaining = width.saturating_sub(fixed_width);
             let first_line = raw.text.split('\n').next().unwrap_or("");
-            let text = truncate_to_width(&sanitize_for_display(first_line), remaining);
+            let text = truncate_to_width(&for_display(first_line, redact), remaining);
             Line::from(vec![Span::styled(marker, marker_style), Span::raw(text)])
         }
     };
@@ -123,10 +125,17 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
     let height = area.height as usize;
     let top = app.top();
     let colors_enabled = colors_enabled();
+    let redact = app.redact();
     let lines: Vec<Line<'static>> = (top..top + height)
         .filter_map(|row| {
             app.record_at(row).map(|record| {
-                record_line(record, row == app.selected_index(), width, colors_enabled)
+                record_line(
+                    record,
+                    row == app.selected_index(),
+                    width,
+                    colors_enabled,
+                    redact,
+                )
             })
         })
         .collect();
@@ -140,12 +149,12 @@ fn render_list(frame: &mut Frame, app: &App, area: Rect) {
     frame.render_widget(Paragraph::new(lines).block(block), area);
 }
 
-fn frame_line(frame_ref: &model::Frame, selected: bool) -> Line<'static> {
+fn frame_line(frame_ref: &model::Frame, selected: bool, redact: bool) -> Line<'static> {
     let location = match (&frame_ref.path, frame_ref.line) {
-        (Some(path), Some(line)) => format!("{path}:{line}"),
+        (Some(path), Some(line)) => format!("{}:{line}", for_display(path, redact)),
         _ => "[internal function]".to_string(),
     };
-    let text = format!("{} ({location})", sanitize_for_display(&frame_ref.func));
+    let text = format!("{} ({location})", for_display(&frame_ref.func, redact));
     let line = Line::raw(text);
     if selected {
         line.style(Style::default().add_modifier(Modifier::REVERSED))
@@ -164,33 +173,43 @@ fn render_detail(frame: &mut Frame, app: &App, area: Rect) {
         return;
     };
 
+    let redact = app.redact();
     let mut lines: Vec<Line<'static>> = Vec::new();
     match record {
         ParsedRecord::Record(record) => {
-            lines.push(Line::raw(sanitize_for_display(&format!(
-                "{} {}.{}",
-                record.datetime,
-                record.channel,
-                record.level.as_str()
-            ))));
+            lines.push(Line::raw(for_display(
+                &format!(
+                    "{} {}.{}",
+                    record.datetime,
+                    record.channel,
+                    record.level.as_str()
+                ),
+                redact,
+            )));
             for message_line in record.message.split('\n') {
-                lines.push(Line::raw(sanitize_for_display(message_line)));
+                lines.push(Line::raw(for_display(message_line, redact)));
             }
             lines.push(Line::raw(""));
-            lines.push(Line::raw(format!("context: {}", record.context)));
-            lines.push(Line::raw(format!("extra: {}", record.extra)));
+            lines.push(Line::raw(for_display(
+                &format!("context: {}", record.context),
+                redact,
+            )));
+            lines.push(Line::raw(for_display(
+                &format!("extra: {}", record.extra),
+                redact,
+            )));
             if !record.frames.is_empty() {
                 lines.push(Line::raw(""));
                 lines.push(Line::raw("frames:"));
                 for (i, frame_ref) in record.frames.iter().enumerate() {
-                    lines.push(frame_line(frame_ref, i == app.detail_frame_index()));
+                    lines.push(frame_line(frame_ref, i == app.detail_frame_index(), redact));
                 }
             }
         }
         ParsedRecord::Raw(raw) => {
             lines.push(Line::raw(format!("RAW[{}]", raw.reason.as_str())));
             for raw_line in raw.text.split('\n') {
-                lines.push(Line::raw(sanitize_for_display(raw_line)));
+                lines.push(Line::raw(for_display(raw_line, redact)));
             }
         }
     }
@@ -200,7 +219,7 @@ fn render_detail(frame: &mut Frame, app: &App, area: Rect) {
 fn render_status(frame: &mut Frame, app: &App, area: Rect) {
     let text = match app.mode() {
         Mode::Search => format!("/{}", app.search_input()),
-        _ if !app.status().is_empty() => app.status().to_string(),
+        _ if !app.status().is_empty() => for_display(app.status(), app.redact()),
         _ => "j/k gg/G Ctrl-d/u / n/N c l F o y ? q".to_string(),
     };
     let width = area.width as usize;
@@ -227,7 +246,7 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
         .split(vertical[1])[1]
 }
 
-fn render_picker(frame: &mut Frame, area: Rect, title: &str, picker: &Picker) {
+fn render_picker(frame: &mut Frame, area: Rect, title: &str, picker: &Picker, redact: bool) {
     let popup = centered_rect(60, 60, area);
     frame.render_widget(Clear, popup);
     let block = Block::default()
@@ -246,7 +265,7 @@ fn render_picker(frame: &mut Frame, area: Rect, title: &str, picker: &Picker) {
             } else {
                 "[ ]"
             };
-            let text = format!("{mark} {item}");
+            let text = format!("{mark} {}", for_display(item, redact));
             let line = Line::raw(text);
             if i == picker.cursor {
                 line.style(Style::default().add_modifier(Modifier::REVERSED))
@@ -316,12 +335,14 @@ pub fn render(frame: &mut Frame, app: &mut App) {
             area,
             " kanalen (spatie/enter/esc) ",
             app.channel_picker(),
+            app.redact(),
         ),
         Mode::LevelPicker => render_picker(
             frame,
             area,
             " niveaus (spatie/enter/esc) ",
             app.level_picker(),
+            app.redact(),
         ),
         Mode::Help => render_help(frame, area),
         Mode::Normal | Mode::Search => {}
@@ -516,7 +537,7 @@ mod tests {
             extra: serde_json::json!([]),
             frames: Vec::new(),
         });
-        let line = record_line(&record, false, 80, true);
+        let line = record_line(&record, false, 80, true, true);
         let level_span = &line.spans[1];
         assert_eq!(level_span.content.trim(), "ERROR");
         assert_eq!(level_span.style.fg, Some(Color::Red));

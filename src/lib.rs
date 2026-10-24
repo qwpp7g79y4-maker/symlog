@@ -23,6 +23,7 @@ pub mod model;
 pub mod parse;
 pub mod plain;
 pub mod reader;
+pub mod redact;
 pub mod startup;
 pub mod time;
 pub mod tui;

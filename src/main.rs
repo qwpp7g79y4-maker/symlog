@@ -51,6 +51,9 @@ struct Cli {
     /// Geen kleur, ook op een tty.
     #[arg(long)]
     no_color: bool,
+    /// Toon geheimen ongemaskeerd. Standaard worden ze vervangen door `***`.
+    #[arg(long)]
+    no_redact: bool,
     /// Forceer de TUI; zonder tty op stdout geeft dit exit 3.
     #[arg(long)]
     tui: bool,
@@ -65,6 +68,8 @@ struct RunOptions<'a> {
     want_plain: bool,
     stdout_is_tty: bool,
     colors_enabled: bool,
+    /// Maskeer geheimen in de uitvoer. Standaard aan; `--no-redact` zet het uit.
+    redact: bool,
     filter: &'a FilterSpec,
 }
 
@@ -85,6 +90,7 @@ fn main() {
         want_plain: cli.plain,
         stdout_is_tty,
         colors_enabled: plain::colors_enabled(stdout_is_tty, cli.no_color, no_color_env_set),
+        redact: !cli.no_redact,
         filter: &filter,
     };
     let code = run(&cli.path, &opts, &mut io::stderr(), &mut io::stdout());
@@ -148,11 +154,12 @@ fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl 
                     opts.follow,
                     opts.filter,
                     opts.colors_enabled,
+                    opts.redact,
                     out,
                     err_out,
                 )
             } else {
-                run_tui_mode(path, opts.follow, opts.filter)
+                run_tui_mode(path, opts.follow, opts.filter, opts.redact)
             }
         }
     }
@@ -168,11 +175,13 @@ fn run_plain_mode(
     follow: bool,
     filter: &FilterSpec,
     colors_enabled: bool,
+    redact: bool,
     out: &mut impl Write,
     err_out: &mut impl Write,
 ) -> i32 {
     let mut follower = Follower::open(path);
     let mut printer = PlainPrinter::new();
+    printer.set_redact(redact);
 
     if let Err(err) = follower.tick() {
         let _ = writeln!(err_out, "{}: {err}", path.display());
@@ -213,7 +222,7 @@ fn run_plain_mode(
 /// ([`App::toggle_follow`]): live bijwerken tijdens de TUI-sessie zelf hoort niet bij
 /// task.md T13 "Doet" (dat vraagt alleen "`--follow` werkt ook in plain"), dus dat
 /// blijft het bestaande, niet-levende follow-statusveld uit T8.
-fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec) -> i32 {
+fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) -> i32 {
     let mut reader = match Reader::open(path) {
         Ok(reader) => reader,
         Err(err) => {
@@ -249,6 +258,7 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec) -> i32 {
     }
 
     let mut app = App::new(records);
+    app.set_redact(redact);
     app.set_filter(filter.clone());
     if follow {
         app.toggle_follow();
@@ -257,7 +267,7 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec) -> i32 {
     match run_in_terminal(|terminal| run_app_loop(terminal, &mut app)) {
         Ok(()) => {
             if let Some(copy) = app.copy_on_exit() {
-                println!("{copy}");
+                println!("{}", symlog::redact::for_display(copy, app.redact()));
             }
             0
         }
@@ -347,6 +357,7 @@ mod tests {
             want_plain: true,
             stdout_is_tty: false,
             colors_enabled: false,
+            redact: true,
             filter,
         }
     }
@@ -428,6 +439,7 @@ mod tests {
             want_plain: false,
             stdout_is_tty: false,
             colors_enabled: false,
+            redact: true,
             filter: &filter,
         };
         let mut err = Vec::new();
@@ -452,6 +464,7 @@ mod tests {
             want_plain: false,
             stdout_is_tty: false,
             colors_enabled: false,
+            redact: true,
             filter: &filter,
         };
         let mut err = Vec::new();

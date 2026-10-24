@@ -126,6 +126,9 @@ pub struct App {
     pending_open: Option<model::Frame>,
     copy_on_exit: Option<String>,
     should_quit: bool,
+    /// Maskeer geheimen in de weergave. Standaard aan; de opgeslagen records blijven
+    /// de oorspronkelijke tekst (het logbestand wordt niet herschreven).
+    redact: bool,
 }
 
 impl App {
@@ -154,7 +157,17 @@ impl App {
             pending_open: None,
             copy_on_exit: None,
             should_quit: false,
+            redact: true,
         }
+    }
+
+    /// Zet maskeren aan of uit voor lijst, zoekresultaten en detail.
+    pub fn set_redact(&mut self, redact: bool) {
+        self.redact = redact;
+    }
+
+    pub fn redact(&self) -> bool {
+        self.redact
     }
 
     // --- lezen (gebruikt door crate::tui::view) ---
