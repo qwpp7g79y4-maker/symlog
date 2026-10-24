@@ -135,9 +135,14 @@ detail) deze waarden door `***`:
 
 - de waarde na `password`, `passwd`, `token`, `secret`, `api_key` en `apikey`
   (`=` of `:`, hoofdletterongevoelig, ook als JSON-veld);
-- het token na `Authorization: Bearer`;
+- het token na `Authorization: Bearer`, ook als JSON-veld
+  (`"Authorization": "Bearer …"`);
+- het wachtwoord in een URL met basic-auth (`https://user:wachtwoord@host`);
 - sleutels die beginnen met `sk_live_` of `sk_test_`;
-- AWS-toegangssleutels `AKIA` plus 16 hoofdletters of cijfers.
+- AWS-toegangssleutels `AKIA` plus 16 hoofdletters of cijfers;
+- een GitHub-token `ghp_` plus minstens 36 letters of cijfers;
+- een Slack-bottoken dat begint met `xoxb-`;
+- een JWT: drie base64url-delen met punten (het eerste begint met `eyJ`).
 
 `--no-redact` toont de oorspronkelijke tekst. Het logbestand op schijf blijft
 ongewijzigd.

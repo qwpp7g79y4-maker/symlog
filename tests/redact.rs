@@ -200,6 +200,127 @@ fn tui_list_search_result_and_detail_mask_secrets() {
     assert!(detail.contains("login failed"), "{detail}");
 }
 
+fn write_body(dir: &Path, body: &str) -> std::path::PathBuf {
+    let path = dir.join("secrets.log");
+    fs::write(&path, body).expect("schrijf log");
+    path
+}
+
+fn load_app_from(log: &str, redact: bool) -> App {
+    let records = symlog::parse::split_records(log)
+        .into_iter()
+        .map(|block| symlog::parse::parse_record_lossy(block.as_bytes()))
+        .collect();
+    let mut app = App::new(records);
+    app.set_redact(redact);
+    app
+}
+
+#[test]
+fn plain_and_tui_mask_authorization_bearer_json_field() {
+    let compact = "compact-bearer-value";
+    let spaced = "spaced-bearer-value";
+    let ctx = "context-bearer-value";
+    let log = format!(
+        "[2026-01-15T10:30:52.000000+01:00] app.INFO: headers {{\"Authorization\":\"Bearer {compact}\"}} and {{\"Authorization\": \"Bearer {spaced}\"}} [] []\n\
+         {{\"message\":\"auth header\",\"context\":{{\"Authorization\":\"Bearer {ctx}\"}},\"level_name\":\"ERROR\",\"channel\":\"security\",\"datetime\":\"2026-01-15T10:30:53.000000+01:00\",\"extra\":[]}}\n"
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &log);
+    let before = fs::read(&path).expect("lees vooraf");
+
+    let stdout = plain_stdout(&path, false);
+    for secret in [compact, spaced] {
+        assert!(!stdout.contains(secret), "plain lekt {secret:?}:\n{stdout}");
+    }
+    assert!(stdout.contains("Bearer ***"), "{stdout}");
+    assert!(stdout.contains("auth header"), "{stdout}");
+    assert_eq!(fs::read(&path).expect("lees achteraf"), before);
+
+    let shown = plain_stdout(&path, true);
+    assert!(shown.contains(compact), "{shown}");
+    assert!(shown.contains(spaced), "{shown}");
+
+    let mut app = load_app_from(&log, true);
+    let _ = screen(&mut app, 220, 40);
+    app.go_top();
+    search(&mut app, "auth header");
+    app.toggle_detail();
+    let detail = screen(&mut app, 220, 40);
+    assert!(
+        !detail.contains(ctx),
+        "detail lekt het JSON-veld:\n{detail}"
+    );
+    assert!(
+        !detail.contains(compact),
+        "lijst of detail lekt het compacte veld:\n{detail}"
+    );
+    assert!(detail.contains("Bearer ***"), "{detail}");
+    assert!(detail.contains("auth header"), "{detail}");
+
+    let mut open = load_app_from(&log, false);
+    let _ = screen(&mut open, 220, 40);
+    open.go_top();
+    search(&mut open, "auth header");
+    open.toggle_detail();
+    let raw = screen(&mut open, 220, 40);
+    assert!(raw.contains(ctx), "--no-redact detail:\n{raw}");
+    assert!(raw.contains(compact), "--no-redact lijst:\n{raw}");
+}
+
+#[test]
+fn plain_output_masks_basic_auth_password_in_urls() {
+    let pass = "s3cret-pass";
+    let log = format!(
+        "[2026-01-15T10:30:54.000000+01:00] app.INFO: connect https://ada:{pass}@db.internal:5432/app via https://example.com/health [] []\n"
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &log);
+
+    let stdout = plain_stdout(&path, false);
+    assert!(
+        !stdout.contains(pass),
+        "plain lekt het URL-wachtwoord:\n{stdout}"
+    );
+    assert!(
+        stdout.contains("https://ada:***@db.internal:5432/app"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("https://example.com/health"), "{stdout}");
+    assert!(stdout.contains("ada:"), "{stdout}");
+
+    let shown = plain_stdout(&path, true);
+    assert!(shown.contains(pass), "--no-redact:\n{shown}");
+    assert!(!shown.contains("***"), "{shown}");
+}
+
+#[test]
+fn plain_output_masks_ghp_xoxb_and_jwt() {
+    let ghp = "ghp_1234567890abcdefghijklmnopqrstuvwxyz";
+    let xoxb = "xoxb-1234567890-123456789012-AbCdEfGhIjKlMnOpQrStUvWx";
+    let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+    let log = format!(
+        "[2026-01-15T10:30:55.000000+01:00] app.INFO: gh {ghp} slack {xoxb} jwt {jwt} ip 10.0.0.5 ver 1.2.3 [] []\n"
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &log);
+
+    let stdout = plain_stdout(&path, false);
+    for secret in [ghp, xoxb, jwt] {
+        assert!(!stdout.contains(secret), "plain lekt {secret:?}:\n{stdout}");
+    }
+    assert!(stdout.contains("ip 10.0.0.5 ver 1.2.3"), "{stdout}");
+    assert!(stdout.contains("***"), "{stdout}");
+
+    let shown = plain_stdout(&path, true);
+    for secret in [ghp, xoxb, jwt] {
+        assert!(
+            shown.contains(secret),
+            "--no-redact mist {secret:?}:\n{shown}"
+        );
+    }
+}
+
 #[test]
 fn tui_no_redact_shows_the_original_values() {
     let mut app = load_app(false);
