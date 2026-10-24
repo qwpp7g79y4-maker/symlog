@@ -128,17 +128,90 @@ fn url_username_is_high_risk_token(bytes: &[u8], i: usize, span: &Span) -> bool 
         return false;
     }
     let user_end = span.keep_end - 1;
-    (i..user_end).any(|j| high_risk_token_covers(bytes, j, user_end))
+    // Eén tabel voor de hele gebruikersnaam (`b64url_run_ends`) i.p.v. een losse
+    // `scan_while` per startpositie: anders scant een naam vol herhaalde
+    // `eyJ`-vulling bij ~1 op de 3 posities opnieuw tot het einde, O(n^2).
+    let run_end = b64url_run_ends(bytes, i, user_end);
+    (i..user_end).any(|j| high_risk_token_covers(bytes, i, j, user_end, &run_end))
 }
 
 /// `[start, end)` begint met een hoog-risico token dat niet voorbij `end` loopt.
 /// De grens vóór `start` telt niet: in een URL-gebruikersnaam mag er een
 /// voorvoegsel staan. Korter dan de gebruikersnaam telt mee (`<token>.extra`);
 /// een match die doorloopt in het wachtwoord telt niet.
-fn high_risk_token_covers(bytes: &[u8], start: usize, end: usize) -> bool {
-    find_high_risk_token(bytes, start, false).is_some_and(|span| {
+fn high_risk_token_covers(
+    bytes: &[u8],
+    base: usize,
+    start: usize,
+    end: usize,
+    run_end: &[usize],
+) -> bool {
+    high_risk_token_at(bytes, base, start, run_end).is_some_and(|span| {
         span.keep_end == start && span.value_end > start && span.value_end <= end
     })
+}
+
+/// Zelfde kandidaten als `find_high_risk_token(bytes, start, false)`, maar de
+/// JWT-tak leest `run_end` (zie `b64url_run_ends`) in plaats van zelf te scannen.
+fn high_risk_token_at(bytes: &[u8], base: usize, start: usize, run_end: &[usize]) -> Option<Span> {
+    match_stripe(bytes, start)
+        .or_else(|| match_akia(bytes, start))
+        .or_else(|| match_github_pat(bytes, start, false))
+        .or_else(|| match_ghp(bytes, start, false))
+        .or_else(|| match_xoxb(bytes, start, false))
+        .or_else(|| match_jwt_with_run_table(bytes, base, start, run_end))
+}
+
+/// Gelijk aan `match_jwt(bytes, i, false)`, maar het einde van elk base64url-deel
+/// komt uit `run_end` (O(1)) i.p.v. uit een eigen `scan_while` (O(resterende lengte)).
+fn match_jwt_with_run_table(
+    bytes: &[u8],
+    base: usize,
+    i: usize,
+    run_end: &[usize],
+) -> Option<Span> {
+    if !bytes[i..].starts_with(b"eyJ") {
+        return None;
+    }
+    let end1 = run_end[i - base];
+    if end1 - i < JWT_SEGMENT_MIN || !dot_at(bytes, end1) {
+        return None;
+    }
+    let start2 = end1 + 1;
+    let end2 = run_end[start2 - base];
+    if end2 - start2 < JWT_SEGMENT_MIN || !dot_at(bytes, end2) {
+        return None;
+    }
+    let start3 = end2 + 1;
+    let end3 = run_end[start3 - base];
+    if end3 - start3 < JWT_SEGMENT_MIN {
+        return None;
+    }
+    // `run_end` stopt al op het eerste niet-base64url-byte, dus `end3` kan geen
+    // base64url-byte zijn; alleen een vierde punt moet de match nog afkeuren.
+    if dot_at(bytes, end3) {
+        return None;
+    }
+    Some(Span {
+        keep_end: i,
+        value_end: end3,
+        resume: end3,
+    })
+}
+
+/// `run_end[k - i]` = eerste positie `>= k` (tot en met `user_end`) die geen
+/// base64url-byte is. `user_end` zelf staat altijd op het scheidingsteken `:`
+/// (geen base64url-byte), dus die grens is al correct als startwaarde.
+fn b64url_run_ends(bytes: &[u8], i: usize, user_end: usize) -> Vec<usize> {
+    let mut run_end = vec![user_end; user_end - i + 1];
+    for k in (i..user_end).rev() {
+        run_end[k - i] = if is_b64url_byte(bytes[k]) {
+            run_end[k + 1 - i]
+        } else {
+            k
+        };
+    }
+    run_end
 }
 
 fn match_assignment(bytes: &[u8], i: usize) -> Option<Span> {
@@ -153,7 +226,7 @@ fn match_assignment(bytes: &[u8], i: usize) -> Option<Span> {
         if j < bytes.len() && (bytes[j] == b'"' || bytes[j] == b'\'') {
             j += 1;
         }
-        j = skip_inline_ws(bytes, j);
+        j = skip_key_operator_gap(bytes, j);
         if j >= bytes.len() || (bytes[j] != b'=' && bytes[j] != b':') {
             continue;
         }
@@ -177,7 +250,7 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
     let mut j = i + WORD.len();
     // JSON-sleutel: "Authorization" : "Bearer …"
     j = skip_one_quote(bytes, j);
-    j = skip_inline_ws(bytes, j);
+    j = skip_key_operator_gap(bytes, j);
     if j >= bytes.len() || bytes[j] != b':' {
         return None;
     }
@@ -577,6 +650,42 @@ fn skip_inline_ws(bytes: &[u8], mut j: usize) -> usize {
         j += 1;
     }
     j
+}
+
+/// Zoals `skip_inline_ws`, maar ook een los stuurteken (NUL, `\v`, `\f`, een
+/// non-breaking space, …) tussen de sleutelnaam en `=`/`:` wordt overgeslagen.
+/// Zonder dit geeft `match_assignment`/`match_bearer` de match stil op zodra zo'n
+/// byte in de weg staat, en blijft de waarde erna ongemaskeerd. `\n`/`\r` tellen
+/// niet mee: die horen bij regelstructuur, niet bij een verdwaald stuurteken.
+fn skip_key_operator_gap(bytes: &[u8], mut j: usize) -> usize {
+    while let Some((ch, len)) = decode_char(bytes, j) {
+        if matches!(ch, '\n' | '\r') {
+            break;
+        }
+        if ch == ' ' || ch == '\t' || ch.is_whitespace() || ch.is_control() {
+            j += len;
+        } else {
+            break;
+        }
+    }
+    j
+}
+
+/// Decodeert het UTF-8-teken dat op byte-positie `j` begint. Gaat ervan uit dat
+/// `j` al op een tekengrens staat (zo wordt deze altijd aangeroepen), dus de
+/// validatie raakt nooit meer dan de paar bytes van dat ene teken.
+fn decode_char(bytes: &[u8], j: usize) -> Option<(char, usize)> {
+    let &b0 = bytes.get(j)?;
+    let len = match b0 {
+        0x00..=0x7F => 1,
+        0xC0..=0xDF => 2,
+        0xE0..=0xEF => 3,
+        0xF0..=0xF7 => 4,
+        _ => return None,
+    };
+    let chunk = bytes.get(j..j + len)?;
+    let ch = std::str::from_utf8(chunk).ok()?.chars().next()?;
+    Some((ch, len))
 }
 
 fn skip_one_quote(bytes: &[u8], j: usize) -> usize {
@@ -1097,5 +1206,46 @@ mod tests {
         assert!(!redact_secrets(&pref_jwt).contains("eyJ"));
         assert_eq!(for_display(&pref_jwt, false), pref_jwt);
         assert_eq!(for_display(&pref_jwt, true), "https://bearer-***:x@");
+    }
+
+    #[test]
+    fn a_stray_control_byte_between_key_and_operator_does_not_bypass_redaction() {
+        // Bevinding breaktest-symlog-0002 #1: `skip_inline_ws` skipt alleen
+        // spatie/tab. Eén ander stuurteken (NUL, `\v`, non-breaking space) tussen
+        // de sleutelnaam en `=`/`:` liet `match_assignment`/`match_bearer` de
+        // match stil opgeven, waardoor de waarde ongemaskeerd bleef.
+        for input in [
+            "password\u{0}=hunter2",
+            "apikey\u{b}=rawkeyvalue",
+            "secret\u{a0}: plainvalue",
+            "Authorization\u{0}: Bearer opaque-leak-999",
+        ] {
+            let out = redact_secrets(input);
+            assert!(
+                out.contains("***"),
+                "geheim lekt door een stuurteken vóór de scheider: {input:?} -> {out:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn url_username_high_risk_scan_stays_linear_for_jwt_like_filler() {
+        // Bevinding breaktest-symlog-0002 #2: `url_username_is_high_risk_token`
+        // riep `high_risk_token_covers` aan voor elke byte-positie in de
+        // gebruikersnaam met `require_boundary = false`, waardoor `match_jwt` op
+        // ~1 op de 3 posities een volledige scan tot het einde van de naam deed.
+        // Dat was O(n^2) voor één URL.
+        let user = "eyJ".repeat(20_000); // 60 000 bytes onschuldige, JWT-achtige vulling
+        let input = format!("fetch https://{user}:x@github.com/org/repo.git tail");
+        let start = std::time::Instant::now();
+        let out = redact_secrets(&input);
+        let elapsed = start.elapsed();
+        assert!(out.contains("***"));
+        assert!(
+            elapsed < std::time::Duration::from_millis(500),
+            "redact_secrets nam {elapsed:?} voor een {}-byte gebruikersnaam: \
+             kwadratische blow-up in url_username_is_high_risk_token",
+            user.len()
+        );
     }
 }
