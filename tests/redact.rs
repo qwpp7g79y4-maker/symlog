@@ -338,3 +338,236 @@ fn tui_no_redact_shows_the_original_values() {
     assert!(text.contains(AKIA), "{text}");
     assert!(text.contains(BEARER), "{text}");
 }
+
+const GHP_PAT: &str = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+const XOXB_TOKEN: &str = "xoxb-1234567890-123456789012-AbCdEfGhIjKlMnOpQrStUvWx";
+const SK_LIVE_TOKEN: &str = "sk_live_abcdef123456789";
+const JWT_TOKEN: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+
+fn monolog_line(message: &str) -> String {
+    format!("[2026-01-15T10:30:44.000000+01:00] app.INFO: {message} [] []\n")
+}
+
+/// Plain-uitvoer mag `token` niet meer bevatten. `--no-redact` toont hem weer.
+/// Het bestand op schijf blijft byte-voor-byte gelijk.
+fn assert_plain_masks_token(message: &str, token: &str, kept: &[&str]) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &monolog_line(message));
+    let before = fs::read(&path).expect("lees vooraf");
+
+    let stdout = plain_stdout(&path, false);
+    assert!(
+        !stdout.contains(token),
+        "plain lekt {token:?} (uitvoer {} bytes)",
+        stdout.len()
+    );
+    for piece in kept {
+        assert!(stdout.contains(piece), "verwacht {piece:?} in:\n{stdout}");
+    }
+    assert_eq!(fs::read(&path).expect("lees achteraf"), before);
+
+    let shown = plain_stdout(&path, true);
+    assert!(
+        shown.contains(token),
+        "--no-redact mist {token:?}:\n{shown}"
+    );
+    assert!(
+        !shown.contains("***"),
+        "geen masker bij --no-redact: {shown}"
+    );
+}
+
+#[test]
+fn plain_output_masks_ghp_username_in_urls() {
+    let message = format!(
+        "git fetch https://{GHP_PAT}:x@github.com/org/repo.git and https://{GHP_PAT}@github.com/org/repo.git"
+    );
+    assert_plain_masks_token(
+        &message,
+        GHP_PAT,
+        &[
+            "https://***:***@github.com/org/repo.git",
+            "https://***@github.com/org/repo.git",
+            "git fetch",
+        ],
+    );
+}
+
+#[test]
+fn plain_output_masks_xoxb_username_in_urls() {
+    let message = format!(
+        "post https://{XOXB_TOKEN}:x@slack.example/api and https://{XOXB_TOKEN}@slack.example/api"
+    );
+    assert_plain_masks_token(
+        &message,
+        XOXB_TOKEN,
+        &[
+            "https://***:***@slack.example/api",
+            "https://***@slack.example/api",
+        ],
+    );
+}
+
+#[test]
+fn plain_output_masks_sk_live_username_in_urls() {
+    let message = format!(
+        "charge https://{SK_LIVE_TOKEN}:x@api.stripe.com/v1 and https://{SK_LIVE_TOKEN}@api.stripe.com/v1"
+    );
+    assert_plain_masks_token(
+        &message,
+        SK_LIVE_TOKEN,
+        &[
+            "https://***:***@api.stripe.com/v1",
+            "https://***@api.stripe.com/v1",
+        ],
+    );
+}
+
+#[test]
+fn plain_output_masks_akia_username_in_urls() {
+    let message = format!(
+        "s3 https://{AKIA}:x@s3.amazonaws.com/bucket and https://{AKIA}@s3.amazonaws.com/bucket"
+    );
+    assert_plain_masks_token(
+        &message,
+        AKIA,
+        &[
+            "https://***:***@s3.amazonaws.com/bucket",
+            "https://***@s3.amazonaws.com/bucket",
+        ],
+    );
+}
+
+#[test]
+fn plain_output_masks_jwt_username_in_urls() {
+    let message = format!(
+        "auth https://{JWT_TOKEN}:x@auth.example/v1 and https://{JWT_TOKEN}@auth.example/v1"
+    );
+    assert_plain_masks_token(
+        &message,
+        JWT_TOKEN,
+        &[
+            "https://***:***@auth.example/v1",
+            "https://***@auth.example/v1",
+        ],
+    );
+}
+
+#[test]
+fn plain_output_masks_git_pat_over_https() {
+    // Letterlijke vorm uit de B4-bevinding: PAT als gebruikersnaam, vast woord
+    // als wachtwoord, zoals git die in HTTPS-fouten zet.
+    let message =
+        format!("git fetch https://{GHP_PAT}:x-oauth-basic@github.com/org/repo.git failed");
+    assert_plain_masks_token(
+        &message,
+        GHP_PAT,
+        &["git fetch https://***:***@github.com/org/repo.git failed"],
+    );
+    let as_password =
+        format!("git fetch https://x-access-token:{GHP_PAT}@github.com/org/repo.git failed");
+    assert_plain_masks_token(
+        &as_password,
+        GHP_PAT,
+        &["https://x-access-token:***@github.com/org/repo.git"],
+    );
+}
+
+#[test]
+fn plain_output_leaves_empty_urls_unchanged() {
+    let message = "see https:// and http:// and https://@host and https://:@host and https://user:@host/x end";
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &monolog_line(message));
+    let stdout = plain_stdout(&path, false);
+    assert!(stdout.contains(message), "{stdout}");
+    assert!(!stdout.contains("***"), "{stdout}");
+    let shown = plain_stdout(&path, true);
+    assert!(shown.contains(message), "{shown}");
+    assert!(!shown.contains("***"), "{shown}");
+}
+
+#[test]
+fn plain_output_masks_oversized_url_token_username() {
+    let bulk = "B".repeat(1024 * 1024);
+    let message = format!("fetch https://{GHP_PAT}:{bulk}@github.com/org/repo.git tail");
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &monolog_line(&message));
+    let before = fs::read(&path).expect("lees vooraf");
+    let stdout = plain_stdout(&path, false);
+    assert!(
+        !stdout.contains(GHP_PAT),
+        "te grote URL lekt het token (uitvoer {} bytes)",
+        stdout.len()
+    );
+    assert!(
+        !stdout.contains(&bulk),
+        "te grote URL lekt het wachtwoord (uitvoer {} bytes)",
+        stdout.len()
+    );
+    assert!(
+        stdout.contains("https://***:***@github.com/org/repo.git tail"),
+        "uitvoer {} bytes, begin: {}",
+        stdout.len(),
+        stdout.chars().take(180).collect::<String>()
+    );
+    assert!(
+        stdout.len() < 400,
+        "te grote URL lekt door ({} bytes)",
+        stdout.len()
+    );
+    assert_eq!(fs::read(&path).expect("lees achteraf"), before);
+}
+
+#[test]
+fn plain_output_broken_urls_do_not_leak_tokens() {
+    let truncated_akia = "AKIAIOSFODNN7EXAMPL";
+    let message = format!(
+        "a https://{GHP_PAT}:x-oauth-basic b https://{GHP_PAT}:x-oauth-basic@ c http:/{GHP_PAT}@github.com/org/repo.git d ://{AKIA}:x@ e https://[ f {truncated_akia}"
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &monolog_line(&message));
+    let stdout = plain_stdout(&path, false);
+    assert!(!stdout.contains(GHP_PAT), "{stdout}");
+    assert!(!stdout.contains(AKIA), "{stdout}");
+    assert!(stdout.contains("https://***:x-oauth-basic "), "{stdout}");
+    assert!(stdout.contains("https://***:x-oauth-basic@"), "{stdout}");
+    assert!(
+        stdout.contains("http:/***@github.com/org/repo.git"),
+        "{stdout}"
+    );
+    assert!(stdout.contains("://***:x@"), "{stdout}");
+    assert!(stdout.contains("https://["), "{stdout}");
+    assert!(
+        stdout.contains(truncated_akia),
+        "afgekapte sleutel is geen AKIA: {stdout}"
+    );
+    let shown = plain_stdout(&path, true);
+    assert!(shown.contains(GHP_PAT), "{shown}");
+    assert!(shown.contains(AKIA), "{shown}");
+    assert!(!shown.contains("***"), "{shown}");
+}
+
+#[test]
+fn plain_output_does_not_mask_ordinary_git_or_user_names() {
+    let message = "clone git@github.com:org/repo.git mail user@example.com ssh ssh://git@github.com/org/repo.git https https://user@github.com/org/repo.git https://git@github.com/org/repo.git pass https://git:s3cret-pass@github.com/org/repo.git https://user:s3cret-pass@github.com/org/repo.git";
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &monolog_line(message));
+    let stdout = plain_stdout(&path, false);
+    for kept in [
+        "git@github.com:org/repo.git",
+        "user@example.com",
+        "ssh://git@github.com/org/repo.git",
+        "https://user@github.com/org/repo.git",
+        "https://git@github.com/org/repo.git",
+        "https://git:***@github.com/org/repo.git",
+        "https://user:***@github.com/org/repo.git",
+    ] {
+        assert!(stdout.contains(kept), "mist {kept:?} in:\n{stdout}");
+    }
+    assert!(!stdout.contains("s3cret-pass"), "{stdout}");
+    let shown = plain_stdout(&path, true);
+    assert!(shown.contains("s3cret-pass"), "{shown}");
+    assert!(shown.contains("git@github.com:org/repo.git"), "{shown}");
+    assert!(shown.contains("user@example.com"), "{shown}");
+    assert!(!shown.contains("***"), "{shown}");
+}
