@@ -340,6 +340,8 @@ fn tui_no_redact_shows_the_original_values() {
 }
 
 const GHP_PAT: &str = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+const GITHUB_PAT: &str =
+    "github_pat_11AAAAAAA0abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz012345678_";
 const XOXB_TOKEN: &str = "xoxb-1234567890-123456789012-AbCdEfGhIjKlMnOpQrStUvWx";
 const SK_LIVE_TOKEN: &str = "sk_live_abcdef123456789";
 const JWT_TOKEN: &str = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
@@ -569,5 +571,112 @@ fn plain_output_does_not_mask_ordinary_git_or_user_names() {
     assert!(shown.contains("s3cret-pass"), "{shown}");
     assert!(shown.contains("git@github.com:org/repo.git"), "{shown}");
     assert!(shown.contains("user@example.com"), "{shown}");
+    assert!(!shown.contains("***"), "{shown}");
+}
+
+#[test]
+fn plain_output_masks_github_pat_username() {
+    let message = format!(
+        "git fetch https://{GITHUB_PAT}:x-oauth-basic@github.com/org/repo.git failed and https://{GITHUB_PAT}@github.com/org/repo.git note {GITHUB_PAT} end https://x-access-token-{GITHUB_PAT}:x@github.com/org/repo.git https://github_pat_short:s3cret@github.com/org/repo.git"
+    );
+    assert_plain_masks_token(
+        &message,
+        GITHUB_PAT,
+        &[
+            "git fetch https://***:***@github.com/org/repo.git failed",
+            "https://***@github.com/org/repo.git",
+            "note *** end",
+            "https://***:***@github.com/org/repo.git",
+            "https://github_pat_short:***@github.com/org/repo.git",
+        ],
+    );
+}
+
+#[test]
+fn plain_output_masks_prefixed_token_username() {
+    let message = format!(
+        "git fetch https://x-access-token-{GHP_PAT}:x-oauth-basic@github.com/org/repo.git failed https://svc-{AKIA}:x@s3.amazonaws.com/bucket https://bearer-{JWT_TOKEN}:x@auth.example/v1 https://pre_{GHP_PAT}:x@github.com/org/repo.git https://x-access-token-{GHP_PAT}@github.com/org/repo.git clone git@github.com:org/repo.git mail user@example.com https://git:s3cret-pass@github.com/org/repo.git https://user:s3cret-pass@github.com/org/repo.git https://x-access-token:x-oauth-basic@github.com/org/repo.git"
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &monolog_line(&message));
+    let before = fs::read(&path).expect("lees vooraf");
+    let stdout = plain_stdout(&path, false);
+    for secret in [GHP_PAT, AKIA, JWT_TOKEN] {
+        assert!(
+            !stdout.contains(secret),
+            "plain lekt {secret:?} (uitvoer {} bytes)",
+            stdout.len()
+        );
+    }
+    assert!(!stdout.contains("eyJ"), "{stdout}");
+    assert!(!stdout.contains("s3cret-pass"), "{stdout}");
+    for kept in [
+        "git fetch https://***:***@github.com/org/repo.git failed",
+        "https://***:***@s3.amazonaws.com/bucket",
+        "https://***:***@auth.example/v1",
+        "https://***:***@github.com/org/repo.git",
+        "https://x-access-token-***@github.com/org/repo.git",
+        "git@github.com:org/repo.git",
+        "user@example.com",
+        "https://git:***@github.com/org/repo.git",
+        "https://user:***@github.com/org/repo.git",
+        "https://x-access-token:***@github.com/org/repo.git",
+    ] {
+        assert!(stdout.contains(kept), "mist {kept:?} in:\n{stdout}");
+    }
+    assert_eq!(fs::read(&path).expect("lees achteraf"), before);
+
+    let shown = plain_stdout(&path, true);
+    for secret in [GHP_PAT, AKIA, JWT_TOKEN, "s3cret-pass"] {
+        assert!(shown.contains(secret), "--no-redact mist {secret:?}");
+    }
+    assert!(shown.contains("git@github.com:org/repo.git"), "{shown}");
+    assert!(shown.contains("user@example.com"), "{shown}");
+    assert!(!shown.contains("***"), "{shown}");
+}
+
+#[test]
+fn plain_output_empty_and_broken_urls_do_not_leak_github_pat_or_prefixed_tokens() {
+    let empty = "see https:// and http:// and :// and https://@host and https://:@host and https://user:@host/x and https://git:@github.com/org/repo.git and https://[ end";
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &monolog_line(empty));
+    let stdout = plain_stdout(&path, false);
+    assert!(stdout.contains(empty), "{stdout}");
+    assert!(!stdout.contains("***"), "{stdout}");
+    let shown = plain_stdout(&path, true);
+    assert!(shown.contains(empty), "{shown}");
+    assert!(!shown.contains("***"), "{shown}");
+
+    let message = format!(
+        "a https://{GITHUB_PAT}:x-oauth-basic b https://{GITHUB_PAT}:x-oauth-basic@ c http:/{GITHUB_PAT}@github.com/org/repo.git d https://x-access-token-{GHP_PAT}:x-oauth-basic@ e https://svc-{AKIA}:x@ f https://bearer-{JWT_TOKEN}:x@ g https://["
+    );
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = write_body(dir.path(), &monolog_line(&message));
+    let before = fs::read(&path).expect("lees vooraf");
+    let stdout = plain_stdout(&path, false);
+    for secret in [GITHUB_PAT, GHP_PAT, AKIA, JWT_TOKEN] {
+        assert!(
+            !stdout.contains(secret),
+            "kapotte URL lekt {secret:?}:\n{stdout}"
+        );
+    }
+    assert!(!stdout.contains("eyJ"), "{stdout}");
+    for kept in [
+        "https://***:x-oauth-basic ",
+        "https://***:x-oauth-basic@",
+        "http:/***@github.com/org/repo.git",
+        "https://x-access-token-***:x-oauth-basic@",
+        "https://svc-***:x@",
+        "https://bearer-***:x@",
+        "https://[",
+    ] {
+        assert!(stdout.contains(kept), "mist {kept:?} in:\n{stdout}");
+    }
+    assert_eq!(fs::read(&path).expect("lees achteraf"), before);
+
+    let shown = plain_stdout(&path, true);
+    for secret in [GITHUB_PAT, GHP_PAT, AKIA, JWT_TOKEN] {
+        assert!(shown.contains(secret), "--no-redact mist {secret:?}");
+    }
     assert!(!shown.contains("***"), "{shown}");
 }

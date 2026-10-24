@@ -8,16 +8,18 @@
 //!   (hoofdletterongevoelig, met `=` of `:`, ook als JSON-veld);
 //! - het token na `Authorization: Bearer`, ook als JSON-veld
 //!   (`"Authorization": "Bearer …"`);
-//! - het wachtwoord in URL-userinfo na `://` (`user:wachtwoord@host`); is de
-//!   gebruikersnaam zelf een hoog-risico token (`ghp_`, `xoxb-`, `sk_live_` /
-//!   `sk_test_`, `AKIA` of een JWT), dan worden gebruikersnaam én wachtwoord
-//!   `***` (`scheme://***:***@host`), ook in de git-vorm
-//!   `scheme://<token>:x-oauth-basic@host`. Een gewone naam (`git`, `user`, `ada`)
-//!   blijft staan. `scheme://<token>@host` (geen `:wachtwoord`) valt onder het
-//!   token zelf;
+//! - het wachtwoord in URL-userinfo na `://` (`user:wachtwoord@host`); staat in
+//!   de gebruikersnaam een hoog-risico token (`ghp_`, `github_pat_`, `xoxb-`,
+//!   `sk_live_` / `sk_test_`, `AKIA` of een JWT), ook ná een voorvoegsel
+//!   (`x-access-token-ghp_…`, `svc-AKIA…`, `bearer-<jwt>`), dan worden
+//!   gebruikersnaam én wachtwoord `***` (`scheme://***:***@host`), ook in de
+//!   git-vorm `scheme://<token>:x-oauth-basic@host`. Een gewone naam (`git`,
+//!   `user`, `ada`) blijft staan. `scheme://<token>@host` (geen `:wachtwoord`)
+//!   valt onder het token zelf;
 //! - een sleutel `sk_live_…` of `sk_test_…`;
 //! - een AWS-toegangssleutel `AKIA` plus precies 16 hoofdletters of cijfers;
 //! - een GitHub-token `ghp_` plus minstens 36 letters of cijfers;
+//! - een fijnmazig GitHub-token `github_pat_` plus minstens 82 letters, cijfers of `_`;
 //! - een Slack-bottoken `xoxb-` met een lichaam van minstens 10 tekens;
 //! - een JWT: drie base64url-delen van minstens 16 tekens, gescheiden door één punt,
 //!   waarvan het eerste deel met `eyJ` begint.
@@ -56,9 +58,9 @@ pub fn redact_secrets(input: &str) -> String {
         if let Some(span) = match_at(bytes, i) {
             if span_is_usable(i, bytes.len(), &span) {
                 // `match_url_userinfo` laat de gebruikersnaam staan en maskeert alleen
-                // het wachtwoord. Is die naam zelf een token, dan zou de scan daarna
-                // pas bij `@` verdergaan en het token nooit meer zien. `user:` wordt
-                // dan `***:`; het wachtwoord blijft de tweede `***`.
+                // het wachtwoord. Staat in die naam een hoog-risico token, ook ná een
+                // voorvoegsel, dan zou de scan daarna pas bij `@` verdergaan en het
+                // token nooit meer zien. De hele naam wordt dan `***`.
                 if url_username_is_high_risk_token(bytes, i, &span) {
                     out.push_str("***:");
                 } else {
@@ -100,15 +102,24 @@ fn match_at(bytes: &[u8], i: usize) -> Option<Span> {
 }
 
 fn match_high_risk_token(bytes: &[u8], i: usize) -> Option<Span> {
-    match_stripe(bytes, i)
-        .or_else(|| match_akia(bytes, i))
-        .or_else(|| match_ghp(bytes, i))
-        .or_else(|| match_xoxb(bytes, i))
-        .or_else(|| match_jwt(bytes, i))
+    find_high_risk_token(bytes, i, true)
 }
 
-/// `scheme://<token>:wachtwoord@host`: de userinfo-span houdt `<token>:` en
-/// vervangt alleen het wachtwoord. Dan is het token de gebruikersnaam.
+/// `require_boundary` geldt in vrije tekst, zodat een token midden in een woord
+/// blijft staan. In een URL-gebruikersnaam is de grens al `://` … `:`, en mag
+/// het token ná een voorvoegsel staan.
+fn find_high_risk_token(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
+    match_stripe(bytes, i)
+        .or_else(|| match_akia(bytes, i))
+        .or_else(|| match_github_pat(bytes, i, require_boundary))
+        .or_else(|| match_ghp(bytes, i, require_boundary))
+        .or_else(|| match_xoxb(bytes, i, require_boundary))
+        .or_else(|| match_jwt(bytes, i, require_boundary))
+}
+
+/// `scheme://<naam>:wachtwoord@host`, waarbij in `<naam>` een hoog-risico token
+/// staat. Het token mag vooraan staan of ná een voorvoegsel (`x-access-token-ghp_…`).
+/// De userinfo-span houdt die naam en vervangt alleen het wachtwoord.
 fn url_username_is_high_risk_token(bytes: &[u8], i: usize, span: &Span) -> bool {
     if i < 3 || bytes[i - 3] != b':' || bytes[i - 2] != b'/' || bytes[i - 1] != b'/' {
         return false;
@@ -116,14 +127,16 @@ fn url_username_is_high_risk_token(bytes: &[u8], i: usize, span: &Span) -> bool 
     if span.keep_end <= i || bytes[span.keep_end - 1] != b':' {
         return false;
     }
-    high_risk_token_covers(bytes, i, span.keep_end - 1)
+    let user_end = span.keep_end - 1;
+    (i..user_end).any(|j| high_risk_token_covers(bytes, j, user_end))
 }
 
 /// `[start, end)` begint met een hoog-risico token dat niet voorbij `end` loopt.
-/// Korter dan de gebruikersnaam telt mee (`<token>.extra`); een match die doorloopt
-/// in het wachtwoord telt niet.
+/// De grens vóór `start` telt niet: in een URL-gebruikersnaam mag er een
+/// voorvoegsel staan. Korter dan de gebruikersnaam telt mee (`<token>.extra`);
+/// een match die doorloopt in het wachtwoord telt niet.
 fn high_risk_token_covers(bytes: &[u8], start: usize, end: usize) -> bool {
-    match_high_risk_token(bytes, start).is_some_and(|span| {
+    find_high_risk_token(bytes, start, false).is_some_and(|span| {
         span.keep_end == start && span.value_end > start && span.value_end <= end
     })
 }
@@ -255,8 +268,8 @@ fn is_url_host_start(b: u8) -> bool {
 /// GitHub classic PAT: `ghp_` plus 36 `[A-Za-z0-9]`. Langer wordt helemaal gemaskeerd.
 const GHP_BODY_MIN: usize = 36;
 
-fn match_ghp(bytes: &[u8], i: usize) -> Option<Span> {
-    if !at_boundary(bytes, i) {
+fn match_ghp(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
+    if require_boundary && !at_boundary(bytes, i) {
         return None;
     }
     const PREFIX: &[u8] = b"ghp_";
@@ -275,12 +288,36 @@ fn match_ghp(bytes: &[u8], i: usize) -> Option<Span> {
     })
 }
 
+/// Fijnmazig GitHub-token. Het lichaam is `[A-Za-z0-9_]`, minstens 82 tekens:
+/// de lengte die GitHub voor `github_pat_` publiceert. Korter blijft staan.
+const GITHUB_PAT_BODY_MIN: usize = 82;
+
+fn match_github_pat(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
+    if require_boundary && !at_boundary(bytes, i) {
+        return None;
+    }
+    const PREFIX: &[u8] = b"github_pat_";
+    if !bytes[i..].starts_with(PREFIX) {
+        return None;
+    }
+    let body = i + PREFIX.len();
+    let end = scan_while(bytes, body, |b| b.is_ascii_alphanumeric() || b == b'_');
+    if end - body < GITHUB_PAT_BODY_MIN {
+        return None;
+    }
+    Some(Span {
+        keep_end: i,
+        value_end: end,
+        resume: end,
+    })
+}
+
 /// Slack-bottoken. Het lichaam is `[A-Za-z0-9-]`, minstens 10 tekens, zodat `xoxb-`
 /// in een zin blijft staan.
 const XOXB_BODY_MIN: usize = 10;
 
-fn match_xoxb(bytes: &[u8], i: usize) -> Option<Span> {
-    if !at_boundary(bytes, i) {
+fn match_xoxb(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
+    if require_boundary && !at_boundary(bytes, i) {
         return None;
     }
     const PREFIX: &[u8] = b"xoxb-";
@@ -304,8 +341,11 @@ fn match_xoxb(bytes: &[u8], i: usize) -> Option<Span> {
 /// punt hoort niet bij een JWT.
 const JWT_SEGMENT_MIN: usize = 16;
 
-fn match_jwt(bytes: &[u8], i: usize) -> Option<Span> {
-    if !at_jwt_boundary(bytes, i) || !bytes[i..].starts_with(b"eyJ") {
+fn match_jwt(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
+    if require_boundary && !at_jwt_boundary(bytes, i) {
+        return None;
+    }
+    if !bytes[i..].starts_with(b"eyJ") {
         return None;
     }
     let end1 = scan_while(bytes, i, is_b64url_byte);
@@ -335,7 +375,10 @@ fn match_jwt(bytes: &[u8], i: usize) -> Option<Span> {
 fn at_jwt_boundary(bytes: &[u8], i: usize) -> bool {
     i == 0 || {
         let prev = bytes[i - 1];
-        prev != b'.' && !is_b64url_byte(prev)
+        // `-` hoort bij base64url, maar is ook het koppelteken in `bearer-<jwt>`.
+        // Een afgekapte URL heeft geen userinfo-span, dus die grens moet hier al
+        // een token-begin zijn. Een punt blijft een scheiding binnen het JWT.
+        prev == b'-' || (prev != b'.' && !is_b64url_byte(prev))
     }
 }
 
@@ -670,6 +713,8 @@ mod tests {
     }
 
     const GHP: &str = "ghp_abcdefghijklmnopqrstuvwxyz0123456789";
+    /// `github_pat_` plus 82 `[A-Za-z0-9_]`, waarvan het laatste teken `_` is.
+    const GITHUB_PAT: &str = "github_pat_11AAAAAAA0abcdefghijklmnopqrstuvwxyz0123456789abcdefghijklmnopqrstuvwxyz012345678_";
     const XOXB: &str = "xoxb-1234567890-123456789012-AbCdEfGhIjKlMnOpQrStUvWx";
     const SK_LIVE: &str = "sk_live_abcdef123456789";
     const SK_TEST: &str = "sk_test_zzzz9999abcd";
@@ -868,5 +913,157 @@ mod tests {
             "https://***:***@github.com/a https://ada:***@db/a git@github.com:org/repo.git user@host"
         );
         assert_eq!(for_display(&mixed, false), mixed);
+    }
+
+    #[test]
+    fn github_pat_username_is_masked() {
+        assert_eq!(GITHUB_PAT.len(), "github_pat_".len() + 82);
+        assert_token_username_masked(GITHUB_PAT, "github.com");
+
+        let git_form =
+            format!("git fetch https://{GITHUB_PAT}:x-oauth-basic@github.com/org/repo.git failed");
+        assert_eq!(
+            redact_secrets(&git_form),
+            "git fetch https://***:***@github.com/org/repo.git failed"
+        );
+        assert!(!redact_secrets(&git_form).contains(GITHUB_PAT));
+        assert_eq!(for_display(&git_form, false), git_form);
+
+        let plain = format!("note {GITHUB_PAT} end");
+        assert_eq!(redact_secrets(&plain), "note *** end");
+        assert_eq!(for_display(&plain, false), plain);
+
+        // Te kort: de naam blijft, het wachtwoord niet. Ook los in tekst.
+        let too_short = &GITHUB_PAT[..GITHUB_PAT.len() - 1];
+        assert_eq!(redact_secrets(too_short), too_short);
+        assert_eq!(
+            redact_secrets("https://github_pat_short:s3cret@github.com/org/repo.git"),
+            "https://github_pat_short:***@github.com/org/repo.git"
+        );
+
+        // Zelfde token ná een voorvoegsel in de gebruikersnaam.
+        let prefixed = format!("https://x-access-token-{GITHUB_PAT}:x@github.com/org/repo.git");
+        assert_eq!(
+            redact_secrets(&prefixed),
+            "https://***:***@github.com/org/repo.git"
+        );
+        assert!(!redact_secrets(&prefixed).contains(GITHUB_PAT));
+        assert_eq!(for_display(&prefixed, false), prefixed);
+    }
+
+    #[test]
+    fn prefixed_token_in_username_is_masked() {
+        let ghp = format!(
+            "git fetch https://x-access-token-{GHP}:x-oauth-basic@github.com/org/repo.git failed"
+        );
+        assert_eq!(
+            redact_secrets(&ghp),
+            "git fetch https://***:***@github.com/org/repo.git failed"
+        );
+        assert!(!redact_secrets(&ghp).contains(GHP));
+
+        // `_` is een identificatie-teken, dus geen gewone tokengrens. In de
+        // gebruikersnaam telt het voorvoegsel toch.
+        let glued = format!("https://pre_{GHP}:x@github.com/org/repo.git");
+        assert_eq!(
+            redact_secrets(&glued),
+            "https://***:***@github.com/org/repo.git"
+        );
+
+        let akia = format!("https://svc-{AKIA_KEY}:x@s3.amazonaws.com/bucket");
+        assert_eq!(
+            redact_secrets(&akia),
+            "https://***:***@s3.amazonaws.com/bucket"
+        );
+        assert!(!redact_secrets(&akia).contains(AKIA_KEY));
+
+        let jwt = format!("https://bearer-{JWT}:x@auth.example/v1");
+        assert_eq!(redact_secrets(&jwt), "https://***:***@auth.example/v1");
+        assert!(!redact_secrets(&jwt).contains(JWT));
+        assert!(!redact_secrets(&jwt).contains("eyJ"));
+        assert_eq!(for_display(&jwt, false), jwt);
+
+        // Zonder wachtwoord is er geen userinfo-span: alleen het token gaat weg.
+        assert_eq!(
+            redact_secrets(&format!(
+                "https://x-access-token-{GHP}@github.com/org/repo.git"
+            )),
+            "https://x-access-token-***@github.com/org/repo.git"
+        );
+        assert_eq!(
+            redact_secrets(&format!("https://bearer-{JWT}@auth.example/v1")),
+            "https://bearer-***@auth.example/v1"
+        );
+
+        // Gewone namen, ook met een koppelteken, blijven staan.
+        assert_eq!(
+            redact_secrets("https://x-access-token:x-oauth-basic@github.com/org/repo.git"),
+            "https://x-access-token:***@github.com/org/repo.git"
+        );
+        assert_eq!(
+            redact_secrets("https://git:s3cret-pass@github.com/org/repo.git"),
+            "https://git:***@github.com/org/repo.git"
+        );
+        assert_eq!(
+            redact_secrets("https://user:s3cret-pass@github.com/org/repo.git"),
+            "https://user:***@github.com/org/repo.git"
+        );
+        let ordinary = "clone git@github.com:org/repo.git and ping user@example.com";
+        assert_eq!(redact_secrets(ordinary), ordinary);
+        assert_eq!(for_display(ordinary, false), ordinary);
+    }
+
+    #[test]
+    fn empty_and_broken_urls_do_not_leak_github_pat_or_prefixed_tokens() {
+        let inputs = [
+            "",
+            "https://",
+            "http://",
+            "://",
+            "https://@host",
+            "https://:@host",
+            "https://user:@host/x",
+            "https://git:@github.com/org/repo.git",
+            "https://[",
+            "https://user:pass",
+        ];
+        for input in inputs {
+            assert_eq!(redact_secrets(input), input, "{input:?}");
+            assert_eq!(for_display(input, true), input, "{input:?}");
+            assert_eq!(for_display(input, false), input, "{input:?}");
+        }
+
+        let missing_host = format!("https://{GITHUB_PAT}:x-oauth-basic@");
+        assert_eq!(redact_secrets(&missing_host), "https://***:x-oauth-basic@");
+        assert!(!redact_secrets(&missing_host).contains(GITHUB_PAT));
+
+        let missing_at = format!("https://{GITHUB_PAT}:x-oauth-basic");
+        assert_eq!(redact_secrets(&missing_at), "https://***:x-oauth-basic");
+        assert!(!redact_secrets(&missing_at).contains(GITHUB_PAT));
+
+        let one_slash = format!("http:/{GITHUB_PAT}@github.com/org/repo.git");
+        assert_eq!(
+            redact_secrets(&one_slash),
+            "http:/***@github.com/org/repo.git"
+        );
+        assert!(!redact_secrets(&one_slash).contains(GITHUB_PAT));
+
+        let pref_ghp = format!("https://x-access-token-{GHP}:x-oauth-basic@");
+        assert_eq!(
+            redact_secrets(&pref_ghp),
+            "https://x-access-token-***:x-oauth-basic@"
+        );
+        assert!(!redact_secrets(&pref_ghp).contains(GHP));
+
+        let pref_akia = format!("https://svc-{AKIA_KEY}:x@");
+        assert_eq!(redact_secrets(&pref_akia), "https://svc-***:x@");
+        assert!(!redact_secrets(&pref_akia).contains(AKIA_KEY));
+
+        let pref_jwt = format!("https://bearer-{JWT}:x@");
+        assert_eq!(redact_secrets(&pref_jwt), "https://bearer-***:x@");
+        assert!(!redact_secrets(&pref_jwt).contains(JWT));
+        assert!(!redact_secrets(&pref_jwt).contains("eyJ"));
+        assert_eq!(for_display(&pref_jwt, false), pref_jwt);
+        assert_eq!(for_display(&pref_jwt, true), "https://bearer-***:x@");
     }
 }
