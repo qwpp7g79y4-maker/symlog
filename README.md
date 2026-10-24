@@ -46,6 +46,7 @@ netwerkverkeer.
 
 ```sh
 cargo install --path .
+cargo install --git https://github.com/qwpp7g79y4-maker/symlog
 ```
 
 Nog niet beschikbaar via `cargo install symlog` (crates.io-publicatie volgt later).
