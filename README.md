@@ -100,9 +100,9 @@ j/k gg/G Ctrl-d/u / n/N c l F o y ? q
 | `gg` | naar de eerste regel |
 | `G` | naar de laatste regel |
 | `Ctrl-d` / `Ctrl-u` | een halve pagina omlaag/omhoog |
-| `/` | zoekprompt openen (reguliere expressie) |
+| `/` | zoekprompt openen (reguliere expressie); `Enter` bevestigt, `Esc` annuleert, `Backspace` wist een teken |
 | `n` / `N` | naar de volgende/vorige zoekmatch |
-| `c` | kanaalkiezer (multi-select, `Spatie` toggelt, `Enter` bevestigt, `Esc` annuleert) |
+| `c` | kanaalkiezer (multi-select; `j`/`k`/`↓`/`↑` verplaatst, `Spatie` toggelt, `Enter` bevestigt, `Esc` annuleert) |
 | `l` | niveaukiezer (zelfde bediening als `c`) |
 | `F` | follow-indicator aan/uit (zie ["Open punten"](#open-punten)) |
 | `o` | toont bestand:regel van het geselecteerde frame in de statusbalk |
@@ -140,12 +140,19 @@ detail) deze waarden door `***`:
   (`=` of `:`, hoofdletterongevoelig, ook als JSON-veld);
 - het token na `Authorization: Bearer`, ook als JSON-veld
   (`"Authorization": "Bearer …"`);
-- het wachtwoord in een URL met basic-auth (`https://user:wachtwoord@host`);
-- sleutels die beginnen met `sk_live_` of `sk_test_`;
-- AWS-toegangssleutels `AKIA` plus 16 hoofdletters of cijfers;
+- het wachtwoord in URL-userinfo na `://` (`user:wachtwoord@host`). Staat in de
+  gebruikersnaam een hoog-risico token (`ghp_`, `github_pat_`, `xoxb-`,
+  `sk_live_` / `sk_test_`, `AKIA` of een JWT), ook ná een voorvoegsel
+  (`x-access-token-ghp_…`, `svc-AKIA…`, `bearer-<jwt>`), dan worden gebruikersnaam
+  én wachtwoord `***` (`scheme://***:***@host`). Een gewone naam blijft staan.
+  `scheme://<token>@host` (geen wachtwoord) valt onder het token zelf;
+- een sleutel `sk_live_` of `sk_test_` gevolgd door minstens één letter of cijfer;
+- een AWS-toegangssleutel `AKIA` plus precies 16 hoofdletters of cijfers;
 - een GitHub-token `ghp_` plus minstens 36 letters of cijfers;
-- een Slack-bottoken dat begint met `xoxb-`;
-- een JWT: drie base64url-delen met punten (het eerste begint met `eyJ`).
+- een fijnmazig GitHub-token `github_pat_` plus minstens 82 letters, cijfers of `_`;
+- een Slack-bottoken `xoxb-` met een lichaam van minstens 10 tekens (`[A-Za-z0-9-]`);
+- een JWT: drie base64url-delen van minstens 16 tekens, gescheiden door één punt,
+  waarvan het eerste met `eyJ` begint.
 
 `--no-redact` toont de oorspronkelijke tekst. Het logbestand op schijf blijft
 ongewijzigd.

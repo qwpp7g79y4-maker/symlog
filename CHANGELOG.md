@@ -25,6 +25,8 @@ Symfony/Monolog-logs.
 - Live volgen (`tail -f`) in plain-uitvoer, met detectie van groei, rename-rotatie en
   afkappen.
 - Plain-tekstuitvoer zonder terminal (pipes, redirects, CI), met optionele kleur.
+- Geheimen in plain-uitvoer en in de TUI worden standaard `***`. `--no-redact` toont
+  de oorspronkelijke tekst. Het logbestand op schijf blijft ongewijzigd.
 - Duidelijke exitcodes voor een leeg, ontbrekend of onleesbaar bestand, en voor een
   map in plaats van een bestand.
 - Bewijs van read-only gedrag (bestandsmetadata blijft ongewijzigd; geen schrijf- of
