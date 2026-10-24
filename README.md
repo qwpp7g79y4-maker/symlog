@@ -10,9 +10,9 @@ netwerkverkeer.
 
 ## Wat het doet
 
-- Leest het Monolog `LineFormatter`-formaat (Monolog 1, 2 en 3) en het
-  `JsonFormatter`-formaat (NDJSON), ook door elkaar in één bestand: het formaat wordt
-  per record bepaald, niet per bestand.
+- Leest het Monolog LineFormatter- en JsonFormatter-formaat (LineFormatter voor
+  Monolog 1, 2 en 3, JsonFormatter als NDJSON), ook door elkaar in één bestand: het
+  formaat wordt per record bepaald, niet per bestand.
 - Herkent multiline-stacktraces (ook over meerdere `[previous exception]`-blokken) en
   JSON-exceptions, en toont de frames (bestand, regel, functie) gestructureerd onder
   het bericht.
@@ -39,7 +39,7 @@ netwerkverkeer.
   (`OpenOptions::new().read(true).write(true).open(...)` in plaats van `File::open`):
   check 1 faalde toen op de hash-vergelijking. De open zelf schrijft niets, maar laat
   zien dat de test een schrijfbare handle wél zou opmerken zodra er geschreven wordt.
-  Die variant staat niet in de broncode; om de proef te herhalen, open het bestand in
+  Die variant staat niet in de broncode; om de proef te herhalen, open dan het bestand in
   `Reader::open` tijdelijk op die manier.
 
 ## Installatie
@@ -111,6 +111,9 @@ j/k gg/G Ctrl-d/u / n/N c l F o y ? q
 | `?` | help-overlay (elke toets sluit hem weer) |
 | `q` / `Ctrl-c` | afsluiten |
 
+Er wordt niet horizontaal gescrold. In de normale modus doet `h` niets; `l` opent de
+niveaukiezer. Tekst die breder is dan het venster wordt afgekapt.
+
 ## Vlaggen
 
 Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
@@ -118,7 +121,7 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 | Vlag | Doet |
 |---|---|
 | `<PATH>` | pad naar het logbestand (verplicht) |
-| `-f`, `--follow` | blijf het bestand volgen (`tail -f`), ook als het nog niet bestaat |
+| `-f`, `--follow` | zonder tty: ontbreekt het pad, dan `wacht op <pad>...` op stderr en het proces blijft wachten (geen exit 1). Verschijnt het bestand, dan komen de records op stdout en het proces blijft lopen. Een leeg bestand geeft geen uitvoer en stopt niet; een regel die er later bij komt, verschijnt alsnog |
 | `--level <LEVEL>` | niveaufilter: een lijst (`error,critical`) of een ondergrens (`>=warning`) |
 | `--channel <KANAAL>` | kanaalfilter, herhaalbaar; `!kanaal` sluit dat kanaal juist uit |
 | `--plain` | forceer plain-uitvoer, ook op een tty |
@@ -151,8 +154,8 @@ ongewijzigd.
 
 | Code | Betekenis |
 |---|---|
-| 0 | normaal afgesloten (ook: leeg bestand) |
-| 1 | bestand ontbreekt (zonder `--follow`) |
+| 0 | normaal afgesloten. Een leeg bestand zonder `--follow` geeft 0 en geen uitvoer. Met `--follow` sluit een leeg bestand niet vanzelf af |
+| 1 | pad ontbreekt en `--follow` staat uit: stderr meldt dat het pad niet bestaat, code 1. Met `--follow` wacht het proces en is de code niet 1 |
 | 2 | gebruiksfout: ontbrekend verplicht argument, ongeldig `--level`, of pad is een map |
 | 3 | `--tui` gevraagd zonder tty op stdout |
 | 4 | I/O-fout tijdens lezen die niet herstelbaar is (inclusief: geen leesrechten) |
