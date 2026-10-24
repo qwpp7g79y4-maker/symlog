@@ -1,10 +1,12 @@
 # symlog
 
+[![crates.io](https://img.shields.io/crates/v/symlog.svg)](https://crates.io/crates/symlog)
+
 Een terminal-logviewer voor Symfony/Monolog-logs, met vim-achtige toetsen. `symlog`
 leest een logbestand alleen (read-only), werkt volledig lokaal en doet geen
 netwerkverkeer.
 
-> **Status:** versie 0.1.0, nog niet gepubliceerd op crates.io en niet getagd. Deze
+> **Status:** versie 0.1.0, gepubliceerd op [crates.io](https://crates.io/crates/symlog) en getagd als v0.1.0. Deze
 > README beschrijft precies wat de huidige binary doet; zie
 > ["Open punten"](#open-punten) voor wat er bewust nog ontbreekt.
 
@@ -45,11 +47,11 @@ netwerkverkeer.
 ## Installatie
 
 ```sh
-cargo install --path .
+cargo install symlog
 cargo install --git https://github.com/qwpp7g79y4-maker/symlog
 ```
 
-Nog niet beschikbaar via `cargo install symlog` (crates.io-publicatie volgt later).
+Of vanuit een lokale checkout: `cargo install --path .`
 
 ## Gebruik
 
