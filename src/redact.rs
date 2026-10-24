@@ -219,10 +219,9 @@ fn match_assignment(bytes: &[u8], i: usize) -> Option<Span> {
         return None;
     }
     for key in KEYS {
-        if !starts_with_ignore_ascii(&bytes[i..], key) {
+        let Some(mut j) = match_key_ignore_ascii(bytes, i, key) else {
             continue;
-        }
-        let mut j = i + key.len();
+        };
         if j < bytes.len() && (bytes[j] == b'"' || bytes[j] == b'\'') {
             j += 1;
         }
@@ -231,7 +230,9 @@ fn match_assignment(bytes: &[u8], i: usize) -> Option<Span> {
             continue;
         }
         j += 1;
-        j = skip_inline_ws(bytes, j);
+        // CR, LF en FF zijn ASCII-witruimte. `skip_inline_ws` slaat ze niet over,
+        // en `scan_value` ziet ze als scheidingsteken en geeft de match dan op.
+        j = skip_ascii_ws(bytes, j);
         if let Some(span) = scan_value(bytes, j) {
             return Some(span);
         }
@@ -244,10 +245,7 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
         return None;
     }
     const WORD: &str = "authorization";
-    if !starts_with_ignore_ascii(&bytes[i..], WORD) {
-        return None;
-    }
-    let mut j = i + WORD.len();
+    let mut j = match_key_ignore_ascii(bytes, i, WORD)?;
     // JSON-sleutel: "Authorization" : "Bearer …"
     j = skip_one_quote(bytes, j);
     j = skip_key_operator_gap(bytes, j);
@@ -259,15 +257,11 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
     j = skip_one_quote(bytes, j);
     j = skip_inline_ws(bytes, j);
     const BEARER: &str = "bearer";
-    if !starts_with_ignore_ascii(&bytes[j..], BEARER) {
-        return None;
-    }
-    j += BEARER.len();
-    if j >= bytes.len() || !bytes[j].is_ascii_whitespace() {
-        return None;
-    }
-    let value_start = skip_inline_ws(bytes, j);
-    if value_start >= bytes.len() || is_bearer_value_end(bytes[value_start]) {
+    let j = match_key_ignore_ascii(bytes, j, BEARER)?;
+    // Spatie en tab werkten al. CR, VT, FF, NBSP en U+200B/U+200C/U+FEFF
+    // tussen `Bearer` en het token lieten de match stuklopen.
+    let value_start = skip_bearer_gap(bytes, j);
+    if value_start == j || value_start >= bytes.len() || is_bearer_value_end(bytes[value_start]) {
         return None;
     }
     let mut value_end = value_start;
@@ -640,9 +634,31 @@ fn is_ident(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 
-fn starts_with_ignore_ascii(haystack: &[u8], key: &str) -> bool {
-    let key_bytes = key.as_bytes();
-    haystack.len() >= key_bytes.len() && haystack[..key_bytes.len()].eq_ignore_ascii_case(key_bytes)
+/// Matcht `key` (ASCII, hoofdletterongevoelig) vanaf `i`. U+200B, U+200C en
+/// U+FEFF mogen tussen de sleuteltekens staan. Die zijn geen witruimte en geen
+/// stuurteken, dus een vaste bytevergelijking ziet `pass\u{200b}word` anders niet.
+/// Een format-teken vóór de eerste letter telt niet mee.
+fn match_key_ignore_ascii(bytes: &[u8], i: usize, key: &str) -> Option<usize> {
+    let mut j = i;
+    for (n, expected) in key.bytes().enumerate() {
+        if n > 0 {
+            while let Some((ch, len)) = decode_char(bytes, j) {
+                if !is_invisible_format(ch) {
+                    break;
+                }
+                j += len;
+            }
+        }
+        if j >= bytes.len() || !bytes[j].eq_ignore_ascii_case(&expected) {
+            return None;
+        }
+        j += 1;
+    }
+    Some(j)
+}
+
+fn is_invisible_format(ch: char) -> bool {
+    matches!(ch, '\u{200B}' | '\u{200C}' | '\u{FEFF}')
 }
 
 fn skip_inline_ws(bytes: &[u8], mut j: usize) -> usize {
@@ -652,17 +668,48 @@ fn skip_inline_ws(bytes: &[u8], mut j: usize) -> usize {
     j
 }
 
+/// Spatie, tab, CR, LF en FF. Alleen ná `=`/`:`, vóór de waarde.
+fn skip_ascii_ws(bytes: &[u8], mut j: usize) -> usize {
+    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+        j += 1;
+    }
+    j
+}
+
+/// Scheiding tussen `Bearer` en het token. Naast spatie en tab ook CR, LF, FF,
+/// VT, NBSP en de onzichtbare format-tekens U+200B, U+200C en U+FEFF.
+fn skip_bearer_gap(bytes: &[u8], mut j: usize) -> usize {
+    while let Some((ch, len)) = decode_char(bytes, j) {
+        if ch.is_ascii_whitespace()
+            || ch == '\u{000B}'
+            || ch == '\u{00A0}'
+            || is_invisible_format(ch)
+        {
+            j += len;
+        } else {
+            break;
+        }
+    }
+    j
+}
+
 /// Zoals `skip_inline_ws`, maar ook een los stuurteken (NUL, `\v`, `\f`, een
-/// non-breaking space, …) tussen de sleutelnaam en `=`/`:` wordt overgeslagen.
-/// Zonder dit geeft `match_assignment`/`match_bearer` de match stil op zodra zo'n
-/// byte in de weg staat, en blijft de waarde erna ongemaskeerd. `\n`/`\r` tellen
-/// niet mee: die horen bij regelstructuur, niet bij een verdwaald stuurteken.
+/// non-breaking space, …) of een onzichtbaar format-teken (U+200B, U+200C,
+/// U+FEFF) tussen de sleutelnaam en `=`/`:` wordt overgeslagen. Zonder dit geeft
+/// `match_assignment`/`match_bearer` de match stil op zodra zo'n byte in de weg
+/// staat, en blijft de waarde erna ongemaskeerd. `\n`/`\r` tellen niet mee: die
+/// horen bij regelstructuur, niet bij een verdwaald stuurteken.
 fn skip_key_operator_gap(bytes: &[u8], mut j: usize) -> usize {
     while let Some((ch, len)) = decode_char(bytes, j) {
         if matches!(ch, '\n' | '\r') {
             break;
         }
-        if ch == ' ' || ch == '\t' || ch.is_whitespace() || ch.is_control() {
+        if ch == ' '
+            || ch == '\t'
+            || ch.is_whitespace()
+            || ch.is_control()
+            || is_invisible_format(ch)
+        {
             j += len;
         } else {
             break;
@@ -1206,6 +1253,71 @@ mod tests {
         assert!(!redact_secrets(&pref_jwt).contains("eyJ"));
         assert_eq!(for_display(&pref_jwt, false), pref_jwt);
         assert_eq!(for_display(&pref_jwt, true), "https://bearer-***:x@");
+    }
+
+    #[test]
+    fn invisible_format_chars_and_whitespace_after_separator_do_not_leak() {
+        // breaktest-symlog-0003, bevinding 1 en 3. Percent-encoding en de
+        // kwadratische `-eyJ`-scan horen niet bij deze gevallen.
+        let cases = [
+            // U+200B, U+200C, U+FEFF in de sleutel
+            ("pass\u{200b}word=hunter2", "pass\u{200b}word=***"),
+            ("pass\u{200c}word=hunter2", "pass\u{200c}word=***"),
+            ("pass\u{feff}word=hunter2", "pass\u{feff}word=***"),
+            // hetzelfde vlak vóór `=`
+            ("password\u{200b}=hunter2", "password\u{200b}=***"),
+            ("password\u{200c}=hunter2", "password\u{200c}=***"),
+            ("password\u{feff}=hunter2", "password\u{feff}=***"),
+            // tussen Bearer en het token
+            (
+                "Authorization: Bearer\u{200b}opaque-token-999",
+                "Authorization: Bearer\u{200b}***",
+            ),
+            (
+                "Authorization: Bearer\u{200c}opaque-token-999",
+                "Authorization: Bearer\u{200c}***",
+            ),
+            (
+                "Authorization: Bearer\u{feff}opaque-token-999",
+                "Authorization: Bearer\u{feff}***",
+            ),
+            // CR, LF, FF ná `=`
+            ("password=\rhunter2", "password=\r***"),
+            ("password=\nhunter2", "password=\n***"),
+            ("password=\u{c}hunter2", "password=\u{c}***"),
+            // CR, VT, FF, NBSP ná Bearer
+            (
+                "Authorization: Bearer\ropaque-token-999",
+                "Authorization: Bearer\r***",
+            ),
+            (
+                "Authorization: Bearer\u{b}opaque-token-999",
+                "Authorization: Bearer\u{b}***",
+            ),
+            (
+                "Authorization: Bearer\u{c}opaque-token-999",
+                "Authorization: Bearer\u{c}***",
+            ),
+            (
+                "Authorization: Bearer\u{a0}opaque-token-999",
+                "Authorization: Bearer\u{a0}***",
+            ),
+            (
+                "{\"Authorization\": \"Bearer\u{a0}opaque-token-999\"}",
+                "{\"Authorization\": \"Bearer\u{a0}***\"}",
+            ),
+        ];
+        for (input, expected) in cases {
+            let out = redact_secrets(input);
+            assert_eq!(out, expected, "{input:?}");
+            let shown = for_display(input, true);
+            assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+            assert!(!shown.contains("hunter2"), "{input:?} -> {shown:?}");
+            assert!(
+                !shown.contains("opaque-token-999"),
+                "{input:?} -> {shown:?}"
+            );
+        }
     }
 
     #[test]
