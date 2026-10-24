@@ -569,3 +569,54 @@ fn generated_stacktrace_records_produce_frames() {
         "fixture moet minstens één JSON-stacktrace bevatten (8 frames)"
     );
 }
+
+/// De kop-scan in `filtered_offsets` (niveaufilter zonder zoekterm) moet dezelfde
+/// offsets opleveren als de volledige parse, ook voorbij de leesbatch van 4096
+/// records. Dit is geen prestatietest: het budget blijft bij
+/// [`bench_mem_256mib_ci_fixture`].
+#[test]
+fn level_filter_matches_full_parse_across_read_batches() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("batch.log");
+    let generated = write_mixed_log(&path, 1_500_000);
+    let mut reader = Reader::open(&path).expect("open");
+    reader.wait_until_indexed().expect("index");
+    assert!(
+        reader.record_count() > 4096,
+        "de fixture moet minstens twee leesbatches beslaan"
+    );
+
+    let spec = FilterSpec {
+        levels: Some(LevelFilter::parse("error").expect("error")),
+        ..Default::default()
+    };
+    let fast = symlog::filter::filtered_offsets(&reader, &spec).expect("snel pad");
+    let mut slow = Vec::new();
+    for i in 0..reader.record_count() {
+        let bytes = reader.record_bytes(i).expect("io").expect("record");
+        let offset = reader.index().offset(i).expect("offset");
+        let parsed = parse_record_lossy(&bytes);
+        if spec.matches_parsed(&parsed) {
+            slow.push(offset);
+        }
+    }
+    assert_eq!(fast, slow);
+    assert_eq!(fast.len(), generated.error_records);
+
+    let search = FilterSpec {
+        levels: Some(LevelFilter::parse(">=warning").expect("warning")),
+        search: Some(regex::Regex::new("generated failure").expect("re")),
+        ..Default::default()
+    };
+    let fast_search = symlog::filter::filtered_offsets(&reader, &search).expect("zoekpad");
+    let mut slow_search = Vec::new();
+    for i in 0..reader.record_count() {
+        let bytes = reader.record_bytes(i).expect("io").expect("record");
+        let offset = reader.index().offset(i).expect("offset");
+        if search.matches_parsed(&parse_record_lossy(&bytes)) {
+            slow_search.push(offset);
+        }
+    }
+    assert_eq!(fast_search, slow_search);
+    assert!(!slow_search.is_empty());
+}

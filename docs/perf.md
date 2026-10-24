@@ -37,24 +37,39 @@ in 10,47 s (los van de gemeten budgetten hieronder).
 | Eerste scherm | < 200 ms | 2,27 ms | ✅ |
 | Volledige index | < 10 s | 3,06 s | ✅ |
 | `G` na index | < 50 ms | 9,3 µs | ✅ |
-| Filter `--level error` | < 15 s | **16,11 s** | ❌ **~7% over budget** |
+| Filter `--level error` | < 15 s | 16,11 s vóór de kop-scan; **niet opnieuw gemeten** | zie de 256 MiB-meting |
 | Toetsrespons tijdens filteren | < 100 ms | 44,0 µs | ✅ |
 
-### Niet gehaald: filter `--level error` (16,11 s tegen een budget van 15 s)
+De 2 GiB-rij voor het filter is de meting van vóór de kop-scan hieronder. Die fixture
+is in deze ronde niet opnieuw gedraaid (`bench_mem_2gib_full_fixture` blijft
+`#[ignore]`). Het budget is niet aangepast.
 
-`filter::filtered_offsets` parset elk record volledig (`parse::parse_record_lossy`,
-dus de hele LineFormatter- of JsonFormatter-parse inclusief de JSON-scan voor
-context/extra) om het niveau te kunnen vergelijken; dat is aanzienlijk duurder dan de
-indexer, die alleen de recordkop controleert. Op deze meting kost dat bij 8,6 miljoen
-records ongeveer 1,9 µs/record, in totaal net over het budget.
+### Filterpad: waar de tijd zat, en de kop-scan
 
-Dit is een **gemeten tekort, niet stil verlaagd** (task.md T12 "Klaar als"): de
-eigenaar moet beslissen of (a) het doel van 15 s acceptabel wordt bijgesteld met deze
-cijfers als onderbouwing, (b) `filtered_offsets` sneller moet (bijvoorbeeld een
-goedkopere kop-only check voor een niveaufilter zonder zoekterm, zodat niet elk record
-volledig geparset hoeft te worden), of (c) dit zo blijft omdat CI-hardware een ander
-resultaat geeft. Dat is bewust geen T12-wijziging aan `filter.rs`: T12 meet, het is aan
-de eigenaar om de implementatie (een latere taak) of het doel zelf aan te passen.
+`filtered_offsets` las elk record met een eigen `pread`, zette het in de LRU-cache
+(capaciteit 4096, dus bij een volle scan alleen verdringen) en parste het daarna
+volledig (`parse_record_lossy`: context-JSON, frames, `Ts`). Een uitsplitsing op een
+64 MiB-fixture uit dezelfde generator (269.717 records, 67.109.000 bytes), release:
+
+| Stap | Tijd | Aandeel |
+|---|---|---|
+| `record_bytes` (pread + cache-lock, geen parse) | 610 ms | ~2,3 µs/record |
+| parse LineFormatter, alleen de parsetijd | 116 ms over 128.116 records | 0,90 µs/record |
+| parse JsonFormatter, alleen de parsetijd | 280 ms over 141.601 records | 1,98 µs/record |
+| `index.offset` per record | 1,6 ms | verwaarloosbaar |
+| `redact_secrets` over dezelfde bytes (niet in het filterpad) | 663 ms, 0 treffers | zou ~2,5 µs/record extra zijn |
+
+Op de 256 MiB-fixture (1.077.218 records) telt dat op tot de gemeten 4,30 s vóór de
+wijziging: ongeveer 2,4 s lezen en 1,6 s parsen. `redact::for_display` /
+`redact_secrets` zitten in plain en de TUI, niet in `filtered_offsets`; de eerdere
+1,95 s in dit document en de 4,30 s van deze ronde zijn dezelfde code, de tweede onder
+hogere belasting (load ~32, via de geheugenwachter). Zoeken (`FilterSpec::search`)
+blijft de volledige parse doen, omdat de zoekterm in message en context kijkt.
+
+Zonder zoekterm classificeert het filter nu alleen de kop (niveau, en het kanaal als
+dat filter aan staat) en leest records in blokken van 4096 per `pread`. Een blok dat
+de scan niet zeker kan plaatsen valt terug op de volledige parse. Raw-records blijven
+staan bij een niveau- of kanaalfilter (task.md T6). Het budget is niet verlaagd.
 
 ## Resultaten: 256 MiB-CI-variant, release (evenredig doel: 1/8 van de 2 GiB-doelen)
 
@@ -62,15 +77,20 @@ Fixture: 1.077.218 records (134.652 niveau ERROR), 268.435.569 bytes.
 
 | Meting | Doel (1/8 van 2 GiB, of gelijk waar grootte-onafhankelijk) | Gemeten | Resultaat |
 |---|---|---|---|
-| Piek-RSS | ≤ 150 MB (zelfde plafond) | 15.839.232 bytes (≈ 15,1 MiB) | ✅ |
-| Eerste scherm | < 200 ms (zelfde) | 2,3 ms | ✅ |
-| Volledige index | < 1,25 s | 0,36 s | ✅ |
-| `G` na index | < 50 ms (zelfde) | 8,6–10,3 µs | ✅ |
-| Filter `--level error` | < 1,875 s | **1,95 s** | ❌ **~4% over budget** |
-| Toetsrespons tijdens filteren | < 100 ms (zelfde) | 0,8–16,4 µs | ✅ |
+| Piek-RSS | ≤ 150 MB (zelfde plafond) | 15.187.968 bytes (≈ 14,5 MiB) | ✅ |
+| Eerste scherm | < 200 ms (zelfde) | 6,2 ms | ✅ |
+| Volledige index | < 1,25 s | 0,67 s | ✅ |
+| `G` na index | < 50 ms (zelfde) | 40 µs | ✅ |
+| Filter `--level error` | < 1,875 s | **0,42 s, 0,43 s en 0,45 s** | ✅ |
+| Toetsrespons tijdens filteren | < 100 ms (zelfde) | 35 µs | ✅ |
 
-Dezelfde oorzaak als bij de 2 GiB-meting hierboven, consistent over drie herhalingen
-(1,94–1,96 s): dit is geen meetruis.
+Opnieuw gemeten na de kop-scan, dezelfde machine, release, drie keer
+`cargo test --release --test gen_big bench_mem_256mib -- --nocapture --test-threads=1`
+onder de geheugenwachter (load ~32). De tabel toont de traagste waarde van die drie
+runs; de filtertijden apart zijn 0,421 s, 0,434 s en 0,454 s. Recordtelling
+ongewijzigd: 1.077.218 records, 134.652 ERROR. Vóór de kop-scan was het filter op
+deze belasting 4,30 s. De eerdere 1,95 s in dit document hoort bij een rustigere run
+van het oude, volledige parse-pad.
 
 ## Resultaten: 256 MiB-variant, debug (`cargo test` zonder `--release`)
 
@@ -78,14 +98,15 @@ Debug-builds hebben geen vergelijkbare optimalisaties, dus `bench_mem_256mib_ci_
 handhaaft de tijd- en RSS-budgetten alleen zonder `debug_assertions` (release); in debug
 draait dezelfde meting puur ter informatie en controleert alleen juistheid
 (recordaantallen, geen verlies, exact de verwachte ERROR-matches — die controles gelden
-altijd, ook in debug). Gemeten (ter informatie, geen budget): piek-RSS 16.416.768 bytes,
-eerste scherm 16,1 ms, volledige index 3,84 s, `G` na index 19,9 µs, filter 9,41 s.
+altijd, ook in debug). De cijfers hieronder zijn van vóór de kop-scan en in deze
+ronde niet opnieuw uitgelezen (ter informatie, geen budget): piek-RSS 16.416.768
+bytes, eerste scherm 16,1 ms, volledige index 3,84 s, `G` na index 19,9 µs, filter
+9,41 s.
 
 ## Gevolg voor CI
 
 De `bench-mem`-job in `.github/workflows/ci.yml` draait `cargo test --release
-bench_mem` en neemt daarmee `bench_mem_256mib_ci_fixture` mee; die job **faalt dus op
-dit moment**, precies op het filter-budget hierboven. Dat is zichtbaar en opzettelijk
-(geen stille aanpassing): de job blijft deze meting rapporteren totdat de eigenaar een
-van de drie opties hierboven kiest. `bench_mem_2gib_full_fixture` blijft `#[ignore]` en
-raakt de gewone CI-run niet.
+bench_mem` en neemt daarmee `bench_mem_256mib_ci_fixture` mee. Na de kop-scan valt
+het filter binnen 1,875 s (zie de drie tijden hierboven); het budget zelf is niet
+veranderd. `bench_mem_2gib_full_fixture` blijft `#[ignore]` en raakt de gewone CI-run
+niet. De 2 GiB-filtertijd van 16,11 s is niet opnieuw gemeten.

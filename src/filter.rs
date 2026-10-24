@@ -74,6 +74,10 @@ impl ChannelFilter {
         }
         self.include.is_empty() || self.include.iter().any(|c| c == channel)
     }
+
+    fn is_active(&self) -> bool {
+        !self.include.is_empty() || !self.exclude.is_empty()
+    }
 }
 
 /// Niveaufilter (task.md T7): een vaste lijst (`error,critical`) of een ondergrens
@@ -154,13 +158,29 @@ impl FilterSpec {
     }
 }
 
+/// Records per `pread` bij een filter zonder zoekterm. Groot genoeg om niet per
+/// record een syscall en een LRU-mutatie te doen, klein genoeg om het gelezen blok
+/// naast de index te laten passen (task.md T12, geheugenplafond).
+const FILTER_READ_BATCH: usize = 4096;
+
 /// Past `spec` toe op alle records die de achtergrondindexer van `reader` tot nu toe
 /// gevonden heeft, en levert de offsets van de records die matchen (task.md T7
 /// "Doet": "een gefilterde offset-lijst"). Pure, synchrone snapshot-functie: opnieuw
 /// aanroepen terwijl de index nog groeit, levert een uitgebreide lijst op zonder eerder
 /// werk te herhalen op een manier die de aanroeper zelf niet in de hand heeft (zie de
 /// moduledoc hierboven voor de T8-achtergrondthread die dit incrementeel aanstuurt).
+///
+/// Zonder zoekterm volstaat de recordkop (niveau en kanaal). De volledige parse blijft
+/// het pad voor een zoekterm, omdat die in message en context kijkt.
 pub fn filtered_offsets(reader: &Reader, spec: &FilterSpec) -> io::Result<Vec<u64>> {
+    if spec.search.is_some() {
+        filtered_offsets_parsed(reader, spec)
+    } else {
+        filtered_offsets_by_header(reader, spec)
+    }
+}
+
+fn filtered_offsets_parsed(reader: &Reader, spec: &FilterSpec) -> io::Result<Vec<u64>> {
     let mut offsets = Vec::new();
     for i in 0..reader.record_count() {
         let Some(bytes) = reader.record_bytes(i)? else {
@@ -175,6 +195,91 @@ pub fn filtered_offsets(reader: &Reader, spec: &FilterSpec) -> io::Result<Vec<u6
         }
     }
     Ok(offsets)
+}
+
+fn filtered_offsets_by_header(reader: &Reader, spec: &FilterSpec) -> io::Result<Vec<u64>> {
+    let count = reader.record_count();
+    let channels_active = spec.channels.is_active();
+    let keep_all = spec.levels.is_none() && !channels_active;
+    let mut offsets = Vec::new();
+    let mut buf = Vec::new();
+    let mut i = 0usize;
+    while i < count {
+        let end_rec = (i + FILTER_READ_BATCH).min(count);
+        let offs = reader.index().copy_offsets(i, end_rec + 1);
+        if offs.is_empty() {
+            break;
+        }
+        let recs = offs.len().min(end_rec - i);
+        if recs == 0 {
+            break;
+        }
+        let chunk_start = offs[0];
+        let end = if offs.len() > recs {
+            Some(offs[recs])
+        } else {
+            None
+        };
+        reader.read_into(chunk_start, end, &mut buf)?;
+        if keep_all {
+            offsets.extend_from_slice(&offs[..recs]);
+        } else {
+            for k in 0..recs {
+                let bytes = record_in_batch(&buf, &offs, k, chunk_start)?;
+                if header_matches(bytes, spec, channels_active) {
+                    offsets.push(offs[k]);
+                }
+            }
+        }
+        i += recs;
+    }
+    Ok(offsets)
+}
+
+fn record_in_batch<'a>(
+    buf: &'a [u8],
+    offs: &[u64],
+    k: usize,
+    chunk_start: u64,
+) -> io::Result<&'a [u8]> {
+    let rel = rel_offset(offs[k], chunk_start)?;
+    let rel_end = if k + 1 < offs.len() {
+        rel_offset(offs[k + 1], chunk_start)?
+    } else {
+        buf.len()
+    };
+    if rel_end < rel || rel_end > buf.len() {
+        return Err(io::Error::other("recordgrens buiten gelezen bereik"));
+    }
+    Ok(&buf[rel..rel_end])
+}
+
+fn rel_offset(offset: u64, chunk_start: u64) -> io::Result<usize> {
+    let rel = offset
+        .checked_sub(chunk_start)
+        .ok_or_else(|| io::Error::other("recordoffset loopt terug"))?;
+    usize::try_from(rel).map_err(|_| io::Error::other("recordoffset past niet in het geheugen"))
+}
+
+fn header_matches(bytes: &[u8], spec: &FilterSpec, channels_active: bool) -> bool {
+    match crate::parse::peek::classify(bytes, channels_active) {
+        crate::parse::peek::Peek::Raw => true,
+        crate::parse::peek::Peek::Unsure => {
+            spec.matches_parsed(&crate::parse::parse_record_lossy(bytes))
+        }
+        crate::parse::peek::Peek::Parsed { level, channel } => {
+            let level_ok = spec
+                .levels
+                .as_ref()
+                .is_none_or(|filter| filter.matches(level));
+            let channel_ok = if channels_active {
+                spec.channels.matches(channel.as_ref())
+            } else {
+                true
+            };
+            level_ok && channel_ok
+        }
+    }
 }
 
 #[cfg(test)]

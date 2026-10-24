@@ -18,6 +18,7 @@
 
 pub mod json;
 pub mod line;
+pub(crate) mod peek;
 pub mod raw;
 pub mod trace;
 

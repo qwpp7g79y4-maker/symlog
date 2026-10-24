@@ -55,6 +55,16 @@ impl RecordIndex {
             .copied()
     }
 
+    /// Kopieert `offsets[start..end]` onder één leeslock. `end` wordt afgekapt op
+    /// de huidige lengte. Het filter gebruikt dit in blokken, zodat het niet per
+    /// record een lock neemt en ook niet de hele index een tweede keer vasthoudt.
+    pub(crate) fn copy_offsets(&self, start: usize, end: usize) -> Vec<u64> {
+        let guard = self.offsets.read().expect("index-lock vergiftigd");
+        let end = end.min(guard.len());
+        let start = start.min(end);
+        guard[start..end].to_vec()
+    }
+
     /// Bytes die de achtergrondindexer al gescand heeft; basis voor een
     /// voortgangsbalk (de balk zelf komt in T8).
     pub fn bytes_scanned(&self) -> u64 {

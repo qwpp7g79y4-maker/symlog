@@ -106,6 +106,35 @@ impl Reader {
     fn read_record_at(&self, start: u64, end: Option<u64>) -> io::Result<Vec<u8>> {
         read_record_at(&self.file, start, end)
     }
+
+    /// Zoals [`read_record_at`], maar hergebruikt `buf`. Bedoeld voor het filter,
+    /// dat veel records achter elkaar leest en de LRU-cache niet per record wil
+    /// vullen (die verdringt zichzelf toch bij een volledige scan).
+    pub(crate) fn read_into(
+        &self,
+        start: u64,
+        end: Option<u64>,
+        buf: &mut Vec<u8>,
+    ) -> io::Result<()> {
+        match end {
+            Some(end) if end < start => Err(io::Error::other("recordbereik loopt terug")),
+            Some(end) => {
+                let len = usize::try_from(end - start)
+                    .map_err(|_| io::Error::other("recordbereik past niet in het geheugen"))?;
+                buf.clear();
+                buf.resize(len, 0);
+                self.file.read_exact_at(buf, start)?;
+                Ok(())
+            }
+            None => {
+                let mut tail = self.file.try_clone()?;
+                tail.seek(SeekFrom::Start(start))?;
+                buf.clear();
+                tail.read_to_end(buf)?;
+                Ok(())
+            }
+        }
+    }
 }
 
 /// Leest de bytes van `start` tot `end` (exclusief) uit `file`, of tot EOF als `end`

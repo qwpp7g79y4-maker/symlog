@@ -71,6 +71,77 @@ pub fn parse_line(block: &str) -> Option<Record> {
     })
 }
 
+/// Niveau en kanaal zoals [`parse_line`] die zou opleveren, zonder frames, tijdzone
+/// of `String`-opbouw. `Ok(None)` als [`parse_line`] `None` zou geven. `Err(())` als
+/// de trailing JSON te ongewoon is om hier zeker te valideren; de aanroeper parset
+/// het blok dan volledig, zodat de uitkomst gelijk blijft.
+pub(crate) struct LineHead<'a> {
+    pub level: Level,
+    pub channel: &'a str,
+}
+
+pub(crate) fn peek_level_channel(block: &str) -> Result<Option<LineHead<'_>>, ()> {
+    let block = strip_line_ending(block);
+
+    let Some(after_open) = block.strip_prefix('[') else {
+        return Ok(None);
+    };
+    let Some(close) = after_open.find(']') else {
+        return Ok(None);
+    };
+    let datetime = &after_open[..close];
+    if !looks_like_datetime(datetime.as_bytes()) {
+        return Ok(None);
+    }
+
+    let Some(after_close) = after_open[close + 1..].strip_prefix(' ') else {
+        return Ok(None);
+    };
+    let Some(colon) = after_close.find(':') else {
+        return Ok(None);
+    };
+    let header = &after_close[..colon];
+    let Some((channel, level_name)) = header.split_once('.') else {
+        return Ok(None);
+    };
+    if channel.is_empty() || !channel.bytes().all(is_channel_byte) {
+        return Ok(None);
+    }
+    let Some(level) = Level::parse(level_name) else {
+        return Ok(None);
+    };
+
+    let Some(remainder) = after_close[colon + 1..].strip_prefix(' ') else {
+        return Ok(None);
+    };
+    let Some(extra_at) = rfind_json_blob(remainder) else {
+        return Ok(None);
+    };
+    if !json_blob_ok(&remainder[extra_at..])? {
+        return Ok(None);
+    }
+    let Some(before_extra) = remainder[..extra_at].strip_suffix(' ') else {
+        return Ok(None);
+    };
+    let Some(context_at) = rfind_json_blob(before_extra) else {
+        return Ok(None);
+    };
+    if !json_blob_ok(&before_extra[context_at..])? {
+        return Ok(None);
+    }
+    if before_extra[..context_at].strip_suffix(' ').is_none() {
+        return Ok(None);
+    }
+
+    Ok(Some(LineHead { level, channel }))
+}
+
+/// `Ok(true)`/`Ok(false)` als de trailing JSON zeker wel of niet geldig is.
+/// `Err(())` als dat hier niet zeker is.
+fn json_blob_ok(blob: &str) -> Result<bool, ()> {
+    crate::parse::peek::accepts_one_json_value(blob)
+}
+
 /// Splitst de volledige inhoud van een LineFormatter-logbestand in afzonderlijke
 /// recordblokken (task.md T4): elke regel die met een geldige recordkop begint, opent
 /// een nieuw blok; andere regels worden aan het lopende blok toegevoegd (een
