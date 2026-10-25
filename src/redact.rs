@@ -381,6 +381,23 @@ fn userinfo_at(bytes: &[u8], pass_start: usize) -> Option<(usize, usize)> {
     // als wachtwoordbyte meegenomen — maar gevolgd door een van de andere
     // vier stopte de wachtwoord-lus na die ene VT, met hetzelfde lek. Sla ze
     // allemaal, in elke combinatie, over vóór die check.
+    //
+    // Afweging (symlog-urlnlatfix-0001): dezelfde `\n`/`\r` die hier bewust
+    // overgeslagen wordt, is ook een gewone regelscheiding. Staat er na een
+    // afgebroken `user:` toevallig een regel die direct op `@` uitkomt (geen
+    // spatie ervoor), dan matcht dit als wachtwoord over de regelgrens heen
+    // en wordt ongerelateerde tekst gemaskeerd (zie
+    // `user_colon_then_newline_with_unrelated_at_on_next_line_stays_masked`
+    // hieronder). Dat is geen geheimenlek, alleen onterechte maskering.
+    // Experimenteel bevestigd dat elke poging om dit op te lossen door CR/LF
+    // hier over te slaan te beperken (bv. stoppen bij de eerste `\n`) exact
+    // de hierboven gedichte lekken heropent: `cr_lf_ff_vt_tab_between_colon_
+    // and_url_password_do_not_leak` en `vt_combined_with_cr_lf_ff_or_tab_
+    // between_colon_and_url_password_do_not_leak` falen dan allebei, omdat
+    // "opaque-token-999" na een losse `\n` byte-voor-byte identiek scant als
+    // "unrelated" na een losse `\n` — er is geen contextvrije manier om deze
+    // twee te onderscheiden. Lekken dichten gaat voor onterechte maskering,
+    // dus dit blijft bewust ongewijzigd.
     let mut k = pass_start;
     while k < bytes.len() && matches!(bytes[k], b'\r' | b'\n' | b'\x0C' | b'\x0B' | b'\t') {
         k += 1;
@@ -2097,6 +2114,26 @@ mod tests {
         // geen URL-userinfo en moet de regel ongemaskeerd blijven.
         let input = "see https://user:\nopaque-token-999 and more text";
         assert_eq!(redact_secrets(input), input);
+    }
+
+    #[test]
+    fn user_colon_then_newline_with_unrelated_at_on_next_line_stays_masked() {
+        // symlog-urlnlatfix-0001, naar aanleiding van symlog-urlvtfixrev-0001.
+        // De skip-lus in `userinfo_at` (zie de afweging in het commentaar
+        // daar) slaat de `\n` na een afgebroken `user:` over; staat de regel
+        // erna toevallig direct tegen een `@` aan, dan matcht dat als
+        // wachtwoord over de regelgrens heen en wordt "unrelated" vervangen
+        // door `***`, al heeft het niets met het afgebroken `user:` te maken.
+        // Dit byte voor byte onderscheiden van het al gedichte lek (dezelfde
+        // losse `\n` vóór "opaque-token-999@host", die wel gemaskeerd moet
+        // blijven) kan niet zonder dat lek te heropenen. Bewuste keuze:
+        // lekken dichten gaat voor onterechte maskering, dus dit blijft
+        // gemaskeerd. Vastgelegd als regressietest zodat een toekomstige
+        // wijziging dit niet per ongeluk alsnog ongemaskeerd laat zonder de
+        // afweging opnieuw te maken.
+        let input = "see https://user:\nunrelated@text.example and more";
+        let expected = "see https://user:***@text.example and more";
+        assert_eq!(redact_secrets(input), expected);
     }
 
     #[test]
