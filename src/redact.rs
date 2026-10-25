@@ -578,6 +578,8 @@ fn match_xoxb(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
 /// Korter dan 16 tekens per deel (versies, IP-adressen) blijft staan. Een vierde
 /// punt hoort niet bij een JWT.
 const JWT_SEGMENT_MIN: usize = 16;
+/// Base64 heeft hoogstens twee `=`-padding-tekens aan het einde.
+const JWT_MAX_PADDING: usize = 2;
 
 /// Onthoudt het einde van de laatst gescande base64url-runs (zoals
 /// `scan_while` met `is_b64url_byte` die zou opleveren), zodat een latere
@@ -667,10 +669,35 @@ fn match_jwt(
     if end3 < bytes.len() && (bytes[end3] == b'.' || is_b64url_byte(bytes[end3])) {
         return None;
     }
+    // base64 heeft hoogstens twee `=`-padding na het laatste segment
+    // (symlog-padfix-0001, breaktest-symlog-0005 bevinding 2). Staat die
+    // padding er, dan hoort ze bij de waarde en moet ze mee gemaskeerd
+    // worden; zonder dit bleef `eyJ....laatste-deel=` of `...==` na de
+    // `***` zichtbaar. Volgt er ná de padding nog een punt of een
+    // base64url-byte, dan is dit geen afgesloten token maar het begin van
+    // iets groters (bv. een vierde dot-segment, of meer base64-achtige
+    // tekst zonder scheiding); in dat geval telt de padding niet mee en
+    // blijft de bestaande, kortere match (zonder padding) staan in plaats
+    // van de hele kandidaat af te keuren — anders zou een toevallige `=`
+    // ná een echt JWT het hele token alsnog ongemaskeerd laten.
+    let mut padded_end = end3;
+    while padded_end < bytes.len()
+        && padded_end - end3 < JWT_MAX_PADDING
+        && bytes[padded_end] == b'='
+    {
+        padded_end += 1;
+    }
+    let value_end = if padded_end < bytes.len()
+        && (bytes[padded_end] == b'.' || is_b64url_byte(bytes[padded_end]))
+    {
+        end3
+    } else {
+        padded_end
+    };
     Some(Span {
         keep_end: i,
-        value_end: end3,
-        resume: end3,
+        value_end,
+        resume: value_end,
     })
 }
 
@@ -1163,6 +1190,42 @@ mod tests {
         let input = format!("v1.2.{JWT}");
         assert_eq!(redact_secrets(&input), input);
         assert_eq!(for_display(&input, true), input);
+    }
+
+    #[test]
+    fn jwt_trailing_base64_padding_is_masked_with_the_token() {
+        // symlog-padfix-0001, breaktest-symlog-0005 bevinding 2. Het derde
+        // segment van een los JWT in vrije tekst stopt bij het eerste
+        // niet-base64url-byte; staat daar base64-`=`-padding, dan hoorde die
+        // vóór deze fix niet bij de gemaskeerde span en bleef zichtbaar.
+        let one_pad = format!("jwt {JWT}= end");
+        assert_eq!(redact_secrets(&one_pad), "jwt *** end");
+        assert!(!redact_secrets(&one_pad).contains('='));
+
+        let two_pad = format!("jwt {JWT}== end");
+        assert_eq!(redact_secrets(&two_pad), "jwt *** end");
+        assert!(!redact_secrets(&two_pad).contains('='));
+    }
+
+    #[test]
+    fn jwt_trailing_padding_stops_after_two_equals_signs() {
+        // Base64-padding is hoogstens twee `=`-tekens. Een derde `=` erna
+        // hoort niet meer bij het token: dat blijft staan, zodat tekst na een
+        // los JWT niet verder gemaskeerd wordt dan nodig.
+        let three_pad = format!("jwt {JWT}=== end");
+        assert_eq!(redact_secrets(&three_pad), "jwt ***= end");
+    }
+
+    #[test]
+    fn padding_after_a_bare_jwt_does_not_change_assignment_or_plain_equals_handling() {
+        // `token=` loopt via `match_assignment`/`scan_unquoted`, niet via
+        // `match_jwt`: die slokt een onquoted waarde al tot de eerste
+        // scheiding op (zie `is_unquoted_delimiter`, `=` is geen scheiding),
+        // dus de padding-fix hieronder raakt dit pad niet.
+        assert_eq!(redact_secrets(&format!("token={JWT}==")), "token=***");
+        // Gewone tekst met `=` zonder voorafgaand JWT blijft ongemoeid.
+        assert_eq!(redact_secrets("a = b"), "a = b");
+        assert_eq!(redact_secrets("x=y=z"), "x=y=z");
     }
 
     #[test]
