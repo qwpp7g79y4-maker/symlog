@@ -942,6 +942,9 @@ fn skip_ws_and_format(bytes: &[u8], mut j: usize) -> usize {
 /// is VT vóór een gequote waarde geen `is_unquoted_delimiter`-byte, waardoor
 /// `scan_unquoted` stopt op het openende aanhalingsteken en alleen VT zelf
 /// maskeert terwijl de rest van de gequote waarde ongemaskeerd blijft staan.
+/// Hetzelfde geldt voor `is_assign_gap_sep` (symlog-uniassignfix-0001): een
+/// expliciete lijst, geen `ch.is_whitespace()` zoals `skip_bearer_gap` (dat
+/// is een bewuste, bredere keuze die hier niet wordt overgenomen).
 /// Stopt op het eerste andere teken.
 fn skip_ascii_ws(bytes: &[u8], mut j: usize) -> usize {
     while j < bytes.len() {
@@ -950,11 +953,20 @@ fn skip_ascii_ws(bytes: &[u8], mut j: usize) -> usize {
             continue;
         }
         match decode_char(bytes, j) {
-            Some((ch, len)) if is_invisible_format(ch) => j += len,
+            Some((ch, len)) if is_invisible_format(ch) || is_assign_gap_sep(ch) => j += len,
             _ => break,
         }
     }
     j
+}
+
+/// U+0085 (NEL), U+2028 (LINE SEPARATOR), U+2029 (PARAGRAPH SEPARATOR) en
+/// U+00A0 (NBSP) tussen `=`/`:` en de waarde (symlog-uniassignfix-0001).
+/// Alleen deze vier losse tekens, niet `char::is_whitespace()`: die laatste
+/// is een bredere, bewuste keuze in `skip_bearer_gap` ná `Bearer` die hier
+/// niet wordt overgenomen.
+fn is_assign_gap_sep(ch: char) -> bool {
+    matches!(ch, '\u{85}' | '\u{2028}' | '\u{2029}' | '\u{A0}')
 }
 
 /// Scheiding tussen `Bearer` en het token. Alle witruimte volgens
@@ -2220,6 +2232,38 @@ mod tests {
                         "{input:?} -> {shown:?}"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn nel_ls_ps_and_nbsp_after_assignment_do_not_leak_a_quoted_value() {
+        // symlog-uniassigncheck-0001. `skip_ascii_ws` kent `is_ascii_whitespace`,
+        // VT en `is_invisible_format`, maar niet U+0085 (NEL), U+2028 (LINE
+        // SEPARATOR), U+2029 (PARAGRAPH SEPARATOR) of U+00A0 (NBSP). Zo'n
+        // teken direct ná `=`/`:` en vóór een gequote waarde is geen
+        // `is_unquoted_delimiter`-byte, waardoor `scan_unquoted` stopt op het
+        // openende aanhalingsteken en alleen het scheidingsteken zelf
+        // maskeert terwijl de gequote waarde erna ongemaskeerd blijft:
+        // `token=\u{85}"opaque-token-999"` -> `token=***"opaque-token-999"`.
+        for key in ["token", "password", "secret"] {
+            for sep in ['\u{85}', '\u{2028}', '\u{2029}', '\u{A0}'] {
+                let input = format!("{key}={sep}\"opaque-token-999\"");
+                let expected = format!("{key}={sep}\"***\"");
+                assert_eq!(redact_secrets(&input), expected, "{input:?}");
+                let shown = for_display(&input, true);
+                assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+                assert!(
+                    !shown.contains("opaque-token-999"),
+                    "{input:?} -> {shown:?}"
+                );
+
+                // Hetzelfde teken staat ook vóór `=` al niet meer in de weg
+                // (dat gat dicht `skip_key_operator_gap` al); dit bevestigt
+                // dat alleen het gat ná `=` nog lekt.
+                let input_both = format!("{key}{sep}={sep}\"opaque-token-999\"");
+                let expected_both = format!("{key}{sep}={sep}\"***\"");
+                assert_eq!(redact_secrets(&input_both), expected_both, "{input_both:?}");
             }
         }
     }
