@@ -236,10 +236,11 @@ fn match_assignment(bytes: &[u8], i: usize) -> Option<Span> {
             continue;
         };
         // U+200B, U+200C of U+FEFF tussen de laatste sleutelletter en het
-        // sluitende aanhalingsteken. `skip_key_operator_gap` slaat dat teken
-        // wel over, maar stopt daarna op `"`/`'`, en dat is geen `=` of `:`.
-        j = skip_invisible_format(bytes, j);
-        j = skip_one_quote(bytes, j);
+        // sluitende aanhalingsteken, en een overbodig tweede aanhalingsteken
+        // (met of zonder format/witruimte ertussen) vóór `=`/`:`.
+        // `skip_key_operator_gap` slaat zo'n teken wel over, maar stopt op
+        // `"`/`'`, en dat is geen `=` of `:`.
+        j = skip_quotes(bytes, j);
         j = skip_key_operator_gap(bytes, j);
         if j >= bytes.len() || (bytes[j] != b'=' && bytes[j] != b':') {
             continue;
@@ -262,23 +263,20 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
     const WORD: &str = "authorization";
     let mut j = match_key_ignore_ascii(bytes, i, WORD)?;
     // JSON-sleutel: "Authorization" : "Bearer …". Zelfde gat als hierboven:
-    // een format-teken vóór het sluitende aanhalingsteken van de sleutel.
-    j = skip_invisible_format(bytes, j);
-    j = skip_one_quote(bytes, j);
+    // een format-teken of een overbodig tweede aanhalingsteken vóór het
+    // sluitende aanhalingsteken van de sleutel.
+    j = skip_quotes(bytes, j);
     j = skip_key_operator_gap(bytes, j);
     if j >= bytes.len() || bytes[j] != b':' {
         return None;
     }
     j += 1;
     // Ná `:` en vóór het openende aanhalingsteken van een gequote
-    // Bearer-waarde kunnen witruimte en U+200B/U+200C/U+FEFF afgewisseld
-    // voorkomen (bv. format, spatie, format). Eén enkele ws- en één enkele
-    // format-stap mist een tweede, later format-run; `skip_ws_and_format`
-    // blijft daarom beide soorten afwisselen tot er geen van beide nog iets
-    // overslaat.
-    j = skip_ws_and_format(bytes, j);
-    j = skip_one_quote(bytes, j);
-    j = skip_ws_and_format(bytes, j);
+    // Bearer-waarde kunnen witruimte, U+200B/U+200C/U+FEFF en een overbodig
+    // herhaald aanhalingsteken afgewisseld voorkomen (bv. format, spatie,
+    // format, quote, quote). `skip_quotes` blijft al die soorten afwisselen
+    // tot er niets meer overblijft om over te slaan.
+    j = skip_quotes(bytes, j);
     const BEARER: &str = "bearer";
     let j = match_key_ignore_ascii(bytes, j, BEARER)?;
     // Spatie en tab werkten al. CR, VT, FF, NBSP en U+200B/U+200C/U+FEFF
@@ -954,6 +952,25 @@ fn skip_one_quote(bytes: &[u8], j: usize) -> usize {
         j + 1
     } else {
         j
+    }
+}
+
+/// Eén of meer herhaalde aanhalingstekens (`"`/`'`), met format-tekens en
+/// witruimte ertussen toegestaan. `skip_one_quote` verwacht precies één
+/// quote; een overbodig tweede aanhalingsteken (bv. `""sleutel""`) laat die
+/// ene stap het échte sluitende teken missen, waarna `match_assignment`/
+/// `match_bearer` de hele match opgeven en het geheim ongemaskeerd blijft.
+/// Blijft daarom, net als `skip_ws_and_format`, afwisselen tot geen van
+/// beide nog iets overslaat: nog steeds één lineaire doorloop over de
+/// overgeslagen tekens, alleen in meer stapjes.
+fn skip_quotes(bytes: &[u8], mut j: usize) -> usize {
+    loop {
+        let before = j;
+        j = skip_ws_and_format(bytes, j);
+        j = skip_one_quote(bytes, j);
+        if j == before {
+            return j;
+        }
     }
 }
 
@@ -1820,5 +1837,45 @@ mod tests {
         let masked = redact_secrets(&input);
         assert!(masked.contains("***"), "{input:?} -> {masked:?}");
         assert!(!masked.contains(jwt), "{input:?} -> {masked:?}");
+    }
+
+    #[test]
+    fn doubled_quote_between_key_and_operator_does_not_leak() {
+        // symlog-quotefix-0001. `skip_one_quote` verwacht precies één
+        // aanhalingsteken; een overbodig tweede aanhalingsteken (al dan niet
+        // met format-tekens/spaties ertussen) liet `match_assignment` en
+        // `match_bearer` de hele match opgeven, waarna het geheim
+        // ongemaskeerd bleef. Alle waarden hieronder zijn fictief.
+        let gaps = ["", "\u{200b}", " ", " \u{200c} "];
+
+        // match_assignment: dubbel aanhalingsteken ná de sleutel, vóór `:`.
+        for gap in gaps {
+            let input = format!("\"password\"\"{gap}:\"hunter3\"");
+            let expected = format!("\"password\"\"{gap}:\"***\"");
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            assert!(!redact_secrets(&input).contains("hunter3"), "{input:?}");
+        }
+
+        // match_bearer, sleutel-kant: "Authorization" dubbel gequote.
+        for gap in gaps {
+            let input = format!("\"Authorization\"\"{gap}:\"Bearer opaque-token-321\"");
+            let expected = format!("\"Authorization\"\"{gap}:\"Bearer ***\"");
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            assert!(
+                !redact_secrets(&input).contains("opaque-token-321"),
+                "{input:?}"
+            );
+        }
+
+        // match_bearer, waarde-kant: dubbel aanhalingsteken vóór `Bearer`.
+        for gap in gaps {
+            let input = format!("\"Authorization\": \"\"{gap}Bearer opaque-token-654\"");
+            let expected = format!("\"Authorization\": \"\"{gap}Bearer ***\"");
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            assert!(
+                !redact_secrets(&input).contains("opaque-token-654"),
+                "{input:?}"
+            );
+        }
     }
 }
