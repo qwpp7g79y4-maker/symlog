@@ -542,37 +542,61 @@ fn match_xoxb(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
 /// punt hoort niet bij een JWT.
 const JWT_SEGMENT_MIN: usize = 16;
 
-/// Onthoudt het einde van de laatst gescande base64url-run (zoals `scan_while`
-/// met `is_b64url_byte` die zou opleveren), zodat een latere kandidaat die
-/// binnen diezelfde run begint niet opnieuw tot het eind van de run scant.
-/// Zonder dit geheugen scant `match_jwt` op een vrije regel vol herhaald
-/// `-eyJ` bij elke `-` opnieuw tot het regeleinde: `-` is zelf een
-/// base64url-byte, dus zonder punt in de run groeit dat tot O(n²). Dezelfde
-/// aanpak als `b64url_run_ends`, maar lui gevuld i.p.v. in één tabel vooraf,
-/// omdat hier (anders dan bij een URL-gebruikersnaam) geen vaste einde-grens
-/// vooraf bekend is.
+/// Onthoudt het einde van de laatst gescande base64url-runs (zoals
+/// `scan_while` met `is_b64url_byte` die zou opleveren), zodat een latere
+/// kandidaat die binnen een van die runs begint niet opnieuw tot het eind
+/// van de run scant. Zonder dit geheugen scant `match_jwt` op een vrije
+/// regel vol herhaald `-eyJ` bij elke `-` opnieuw tot het regeleinde (of tot
+/// het eerste punt): `-` is zelf een base64url-byte. Dezelfde aanpak als
+/// `b64url_run_ends`, maar lui gevuld i.p.v. in één tabel vooraf, omdat hier
+/// (anders dan bij een URL-gebruikersnaam) geen vaste einde-grens vooraf
+/// bekend is.
+///
+/// `match_jwt` doet per kandidaat tot drie `end_from`-aanroepen (één per
+/// JWT-segment). Met maar één onthouden bereik overschreef de tweede
+/// aanroep (ná het eerste punt) het bereik van de eerste: zodra de run een
+/// punt bevat, verloor elke volgende `eyJ`-start in diezelfde run zijn
+/// cache-hit en scande opnieuw tot dat punt -> O(n²) voor de hele run. Drie
+/// sleuven (één per segment, round-robin overschreven) houden het bereik van
+/// elk segment vast, want elke herhaalde `eyJ`-start in dezelfde run vraagt
+/// voor elk segment telkens hetzelfde `[start, end)`-paar op.
+const B64URL_RUN_CACHE_SLOTS: usize = 3;
+
 struct B64UrlRunCache {
-    start: usize,
-    end: usize,
+    slots: [(usize, usize); B64URL_RUN_CACHE_SLOTS],
+    next: usize,
 }
 
 impl B64UrlRunCache {
     fn new() -> Self {
-        Self { start: 0, end: 0 }
+        Self {
+            slots: [(0, 0); B64URL_RUN_CACHE_SLOTS],
+            next: 0,
+        }
     }
 
-    /// Eerste positie `>= i` die geen base64url-byte is. Valt `i` binnen de
-    /// laatst gescande run, dan is dat antwoord al bekend (de hele run tussen
-    /// `start` en `end` is toen al als base64url bevestigd, dus elk deel
-    /// daarvan geldt nog); anders scant dit opnieuw vanaf `i` en onthoudt het
-    /// resultaat.
+    /// Eerste positie `>= i` die geen base64url-byte is. Valt `i` binnen een
+    /// van de onthouden runs, dan is dat antwoord al bekend (de hele run
+    /// tussen `start` en `end` is toen al als base64url bevestigd, dus elk
+    /// deel daarvan geldt nog); anders scant dit opnieuw vanaf `i` en
+    /// onthoudt het resultaat in de oudste sleuf.
     fn end_from(&mut self, bytes: &[u8], i: usize) -> usize {
-        if self.start <= i && i < self.end {
-            return self.end;
+        for &(start, end) in &self.slots {
+            if start <= i && i < end {
+                return end;
+            }
         }
         let end = scan_while(bytes, i, is_b64url_byte);
-        self.start = i;
-        self.end = end;
+        // Een lege range (`i` zelf al geen base64url-byte, bijvoorbeeld meteen ná
+        // een punt aan het einde van de tekst) kan nooit opnieuw een hit geven
+        // (`start <= i && i < end` eist `end > start`). Zo'n range toch opslaan
+        // kost niets aan scan-tijd (er is niets gescand), maar verbruikt wél een
+        // sleuf in de round-robin en zou daarmee op een gegeven moment de sleuf
+        // met de lange, wél herbruikbare run overschrijven.
+        if end > i {
+            self.slots[self.next] = (i, end);
+            self.next = (self.next + 1) % self.slots.len();
+        }
         end
     }
 }
@@ -1831,6 +1855,58 @@ mod tests {
             "redact_secrets nam {elapsed:?} voor {} bytes vrije -eyJ-vulling: \
              kwadratische blow-up in match_jwt",
             filler.len()
+        );
+
+        // Een echte (fictieve) JWT ertussen moet nog steeds gemaskeerd worden.
+        let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
+                   .eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0\
+                   .SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        let input = format!("log line before {jwt} log line after");
+        let masked = redact_secrets(&input);
+        assert!(masked.contains("***"), "{input:?} -> {masked:?}");
+        assert!(!masked.contains(jwt), "{input:?} -> {masked:?}");
+    }
+
+    #[test]
+    fn free_text_dash_eyj_filler_with_trailing_dot_scan_stays_linear_and_real_jwt_still_masked() {
+        // symlog-eyjdotfix-0001, review symlog-eyjfixrev-0001 bevinding 1. Zodra de
+        // `-eyJ`-run eindigt op een punt, doet `match_jwt` een tweede (en derde)
+        // `end_from`-aanroep voorbij dat punt. Met één cache-sleuf overschreef die
+        // aanroep het bereik van de eerste, waardoor elke volgende `eyJ`-start in
+        // dezelfde run opnieuw tot het punt scande: O(n^2). Vergelijk de tijd bij
+        // `n` en `10n`: bij lineair gedrag blijft de verhouding ruim onder de
+        // ~100x die kwadratisch gedrag zou geven.
+        fn ratio_for(build: impl Fn(usize) -> String) -> f64 {
+            let n = 6_000;
+            let small = build(n);
+            let start = std::time::Instant::now();
+            let out_small = redact_secrets(&small);
+            let elapsed_small = start.elapsed().max(std::time::Duration::from_micros(1));
+            assert_eq!(out_small, small, "vulling mag niet veranderen");
+
+            let big = build(n * 10);
+            let start = std::time::Instant::now();
+            let out_big = redact_secrets(&big);
+            let elapsed_big = start.elapsed();
+            assert_eq!(out_big, big, "vulling mag niet veranderen");
+
+            elapsed_big.as_secs_f64() / elapsed_small.as_secs_f64()
+        }
+
+        // Run die eindigt op een punt, zonder tweede segment erna.
+        let ratio = ratio_for(|k| format!("{}.", "-eyJ".repeat(k)));
+        assert!(
+            ratio < 50.0,
+            "10x invoer gaf {ratio:.1}x de tijd: kwadratische blow-up in match_jwt \
+             bij een punt ná de -eyJ-run"
+        );
+
+        // Variant met een kort, mislukkend tweede segment ná het punt.
+        let ratio_short_second = ratio_for(|k| format!("{}.a", "-eyJ".repeat(k)));
+        assert!(
+            ratio_short_second < 50.0,
+            "10x invoer (kort tweede segment) gaf {ratio_short_second:.1}x de tijd: \
+             kwadratische blow-up in match_jwt bij een punt ná de -eyJ-run"
         );
 
         // Een echte (fictieve) JWT ertussen moet nog steeds gemaskeerd worden.
