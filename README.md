@@ -6,9 +6,10 @@ Een terminal-logviewer voor Symfony/Monolog-logs, met vim-achtige toetsen. `syml
 leest een logbestand alleen (read-only), werkt volledig lokaal en doet geen
 netwerkverkeer.
 
-> **Status:** versie 0.1.0, gepubliceerd op [crates.io](https://crates.io/crates/symlog) en getagd als v0.1.0. Deze
-> README beschrijft precies wat de huidige binary doet; zie
-> ["Open punten"](#open-punten) voor wat er bewust nog ontbreekt.
+> **Status:** versie 0.1.1 (nog niet getagd of gepubliceerd); laatst uitgebracht op
+> [crates.io](https://crates.io/crates/symlog) en getagd als v0.1.0. Deze README beschrijft
+> precies wat de huidige binary doet; zie ["Open punten"](#open-punten) voor wat er bewust
+> nog ontbreekt.
 
 ## Wat het doet
 

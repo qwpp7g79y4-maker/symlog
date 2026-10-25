@@ -4,6 +4,23 @@ Alle noemenswaardige wijzigingen in dit project staan in dit bestand. Het formaa
 gebaseerd op [Keep a Changelog](https://keepachangelog.com/); dit project gebruikt nog
 geen SemVer-garanties zolang het niet gepubliceerd is.
 
+## 0.1.1 — 2026-10-25
+
+### Opgelost
+
+- Een los JWT-achtig token met base64-padding (`=`/`==`) direct na het derde segment
+  liet de laatste een of twee tekens van het geheim ongemaskeerd staan; de padding
+  wordt nu mee geredigeerd.
+- Een `Authorization`-, `password`- of `apikey`-waarde na een CR of LF vlak vóór de
+  scheidingstekens (`:`/`=`) werd niet geredigeerd; dat gat is gedicht voor zowel
+  Bearer- als wachtwoord/apikey-waarden.
+- Een laatste regel zonder afsluitend regeleinde werd in een eenmalige (niet
+  `--follow`) plain-run stilzwijgend weggelaten; die staartregel verschijnt nu
+  alsnog, geredigeerd.
+- Een losse NEL, LINE SEPARATOR, PARAGRAPH SEPARATOR of NBSP in het gat vóór een
+  quoted waarde kon de redactie van die waarde omzeilen; die tekens worden nu net
+  als andere format-tekens overgeslagen.
+
 ## 0.1.0 — eerste lokale versie
 
 Eerste werkende versie van `symlog`: een read-only terminal-logviewer voor

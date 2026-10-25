@@ -1,6 +1,6 @@
 [package]
 name = "symlog"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 # Opgehoogd in T2: `lru` vanaf de ondergrens die deny.toml eist (>=0.18.2, zie T1)
 # vereist zelf rustc 1.85.0. Opgehoogd in T8: `ratatui` 0.29 bracht intern `lru 0.12`
