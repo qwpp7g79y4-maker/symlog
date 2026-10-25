@@ -260,14 +260,15 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
         return None;
     }
     j += 1;
-    j = skip_inline_ws(bytes, j);
-    // U+200B, U+200C of U+FEFF ná `:` en vóór het openende aanhalingsteken
-    // van een gequote Bearer-waarde. `skip_inline_ws` kent alleen spatie/tab,
-    // dus zonder deze tak blijft zo'n teken hier liggen en mist `skip_one_quote`
-    // de quote erna, waardoor de hele match wordt opgegeven.
-    j = skip_invisible_format(bytes, j);
+    // Ná `:` en vóór het openende aanhalingsteken van een gequote
+    // Bearer-waarde kunnen witruimte en U+200B/U+200C/U+FEFF afgewisseld
+    // voorkomen (bv. format, spatie, format). Eén enkele ws- en één enkele
+    // format-stap mist een tweede, later format-run; `skip_ws_and_format`
+    // blijft daarom beide soorten afwisselen tot er geen van beide nog iets
+    // overslaat.
+    j = skip_ws_and_format(bytes, j);
     j = skip_one_quote(bytes, j);
-    j = skip_inline_ws(bytes, j);
+    j = skip_ws_and_format(bytes, j);
     const BEARER: &str = "bearer";
     let j = match_key_ignore_ascii(bytes, j, BEARER)?;
     // Spatie en tab werkten al. CR, VT, FF, NBSP en U+200B/U+200C/U+FEFF
@@ -803,6 +804,22 @@ fn skip_inline_ws(bytes: &[u8], mut j: usize) -> usize {
         j += 1;
     }
     j
+}
+
+/// Afwisselend `skip_inline_ws` en `skip_invisible_format`, tot geen van
+/// beide nog iets overslaat. Zo blijft elke gemengde reeks van spatie/tab en
+/// U+200B/U+200C/U+FEFF overgeslagen, ook als de twee soorten elkaar meer dan
+/// één keer afwisselen (format, spatie, format, …), terwijl elke stap zelf
+/// nog steeds één keer lineair over de bytes loopt.
+fn skip_ws_and_format(bytes: &[u8], mut j: usize) -> usize {
+    loop {
+        let before = j;
+        j = skip_inline_ws(bytes, j);
+        j = skip_invisible_format(bytes, j);
+        if j == before {
+            return j;
+        }
+    }
 }
 
 /// Spatie, tab, CR, LF, FF, en U+200B, U+200C, U+FEFF. Alleen ná `=`/`:`,
@@ -1704,6 +1721,24 @@ mod tests {
         assert_eq!(
             redact_secrets("Authorization: Bearer opaque-token-999"),
             "Authorization: Bearer ***"
+        );
+    }
+
+    #[test]
+    fn two_format_runs_separated_by_space_after_colon_before_quoted_bearer_value_does_not_leak() {
+        // symlog-bearerfmtfixrev-0001: de vorige fix sloeg na de `:` maar één
+        // ws-run en één format-run over, elk precies één keer. Een tweede
+        // format-run die pas ná de laatste ws-skip begint (format, spatie,
+        // format, dan de quote) werd gemist, en `match_bearer` gaf de hele
+        // match op.
+        let input = "\"Authorization\":\u{200b} \u{200c}\"Bearer opaque-token-999\"";
+        let expected = "\"Authorization\":\u{200b} \u{200c}\"Bearer ***\"";
+        assert_eq!(redact_secrets(input), expected, "{input:?}");
+        let shown = for_display(input, true);
+        assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+        assert!(
+            !shown.contains("opaque-token-999"),
+            "{input:?} -> {shown:?}"
         );
     }
 }
