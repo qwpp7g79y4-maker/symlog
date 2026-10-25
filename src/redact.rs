@@ -295,22 +295,9 @@ fn match_url_userinfo(bytes: &[u8], i: usize) -> Option<Span> {
     if i < 3 || bytes[i - 3] != b':' || bytes[i - 2] != b'/' || bytes[i - 1] != b'/' {
         return None;
     }
-    let mut j = i;
-    while j < bytes.len() && is_url_user_byte(bytes[j]) {
-        j += 1;
-    }
-    if j == i || j >= bytes.len() || bytes[j] != b':' {
-        return None;
-    }
-    let pass_start = j + 1;
-    let mut k = pass_start;
-    while k < bytes.len() && is_url_pass_byte(bytes[k]) {
-        k += 1;
-    }
-    if k == pass_start || k >= bytes.len() || bytes[k] != b'@' {
-        return None;
-    }
-    let host = k + 1;
+    let pass_start = userinfo_colon(bytes, i)?;
+    let (k, sep_len) = userinfo_at(bytes, pass_start)?;
+    let host = k + sep_len;
     if host >= bytes.len() || !is_url_host_start(bytes[host]) {
         return None;
     }
@@ -319,6 +306,80 @@ fn match_url_userinfo(bytes: &[u8], i: usize) -> Option<Span> {
         value_end: k,
         resume: k,
     })
+}
+
+/// Grens tussen gebruikersnaam en wachtwoord. Een rauwe `:` gaat voor; alleen
+/// als die nergens in de genaam voorkomt (bevinding 2: `%3A` is dan de enige
+/// scheiding die een aanvaller heeft gebruikt) telt een percent-encoded `%3A`.
+/// Dat voorkomt dat een `%3A`/`%40` die toevallig in een gewoon wachtwoord zit
+/// vóór de echte, rauwe scheider verandert waar de naam of het wachtwoord stopt.
+fn userinfo_colon(bytes: &[u8], i: usize) -> Option<usize> {
+    let mut j = i;
+    while j < bytes.len() && is_url_user_byte(bytes[j]) {
+        j += 1;
+    }
+    if j == i {
+        return None;
+    }
+    if j < bytes.len() && bytes[j] == b':' {
+        return Some(j + 1);
+    }
+    let pos = find_pct_escape(bytes, i, j, b':')?;
+    Some(pos + 3)
+}
+
+/// Zelfde idee voor de grens tussen wachtwoord en host (`@` of `%40`).
+fn userinfo_at(bytes: &[u8], pass_start: usize) -> Option<(usize, usize)> {
+    let mut k = pass_start;
+    while k < bytes.len() && is_url_pass_byte(bytes[k]) {
+        k += 1;
+    }
+    if k == pass_start {
+        return None;
+    }
+    if k < bytes.len() && bytes[k] == b'@' {
+        return Some((k, 1));
+    }
+    let pos = find_pct_escape(bytes, pass_start, k, b'@')?;
+    Some((pos, 3))
+}
+
+/// Eerste `%XY` in `bytes[start..end]` die decodeert naar `want` (hex-cijfers
+/// hoofdletterongevoelig). Gebruikt als terugval in `userinfo_colon`/`userinfo_at`
+/// wanneer de rauwe scheider in dat bereik ontbreekt.
+fn find_pct_escape(bytes: &[u8], start: usize, end: usize, want: u8) -> Option<usize> {
+    let mut j = start;
+    while j < end {
+        let (b, len) = decode_pct_byte(bytes, j);
+        if len == 3 && b == want {
+            return Some(j);
+        }
+        j += 1;
+    }
+    None
+}
+
+/// Decodeert `%XY` (hex, hoofdletterongevoelig) op positie `j` naar de bedoelde
+/// byte. Geen geldige escape op `j`, dan het rauwe byte zelf met lengte 1.
+fn decode_pct_byte(bytes: &[u8], j: usize) -> (u8, usize) {
+    let b0 = bytes[j];
+    if b0 == b'%' {
+        if let (Some(&h), Some(&l)) = (bytes.get(j + 1), bytes.get(j + 2)) {
+            if let (Some(hv), Some(lv)) = (hex_val(h), hex_val(l)) {
+                return (hv * 16 + lv, 3);
+            }
+        }
+    }
+    (b0, 1)
+}
+
+fn hex_val(b: u8) -> Option<u8> {
+    match b {
+        b'0'..=b'9' => Some(b - b'0'),
+        b'a'..=b'f' => Some(b - b'a' + 10),
+        b'A'..=b'F' => Some(b - b'A' + 10),
+        _ => None,
+    }
 }
 
 fn is_url_user_byte(b: u8) -> bool {
@@ -344,12 +405,13 @@ fn match_ghp(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
         return None;
     }
     const PREFIX: &[u8] = b"ghp_";
-    if !bytes[i..].starts_with(PREFIX) {
-        return None;
-    }
-    let body = i + PREFIX.len();
-    let end = scan_while(bytes, body, |b| b.is_ascii_alphanumeric());
-    if end - body < GHP_BODY_MIN {
+    // Percent-decoded, zodat `%67hp_…` (of `%xx` in het lichaam) niet langs de
+    // letterlijke bytevergelijking glipt (bevinding 2, een URL-gebruikersnaam
+    // vol percent-encoding). Zonder `%` in de invoer is dit gelijk aan de
+    // oude rauwe `starts_with`/`scan_while`.
+    let body = pct_match_prefix(bytes, i, PREFIX)?;
+    let (end, count) = pct_scan_while(bytes, body, |b| b.is_ascii_alphanumeric());
+    if count < GHP_BODY_MIN {
         return None;
     }
     Some(Span {
@@ -357,6 +419,39 @@ fn match_ghp(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
         value_end: end,
         resume: end,
     })
+}
+
+/// Vergelijkt `expected` met de percent-gedecodeerde bytes vanaf `i`. Geeft de
+/// rauwe eindpositie terug zodra alle bytes van `expected` gematcht zijn.
+fn pct_match_prefix(bytes: &[u8], i: usize, expected: &[u8]) -> Option<usize> {
+    let mut j = i;
+    for &want in expected {
+        if j >= bytes.len() {
+            return None;
+        }
+        let (b, len) = decode_pct_byte(bytes, j);
+        if b != want {
+            return None;
+        }
+        j += len;
+    }
+    Some(j)
+}
+
+/// Zoals `scan_while`, maar telt gedecodeerde tekens i.p.v. rauwe bytes: een
+/// `%41` in het lichaam telt als één alfanumeriek teken. Geeft de rauwe
+/// eindpositie en het aantal gedecodeerde tekens terug.
+fn pct_scan_while(bytes: &[u8], mut j: usize, pred: impl Fn(u8) -> bool) -> (usize, usize) {
+    let mut count = 0;
+    while j < bytes.len() {
+        let (b, len) = decode_pct_byte(bytes, j);
+        if !pred(b) {
+            break;
+        }
+        j += len;
+        count += 1;
+    }
+    (j, count)
 }
 
 /// Fijnmazig GitHub-token. Het lichaam is `[A-Za-z0-9_]`, minstens 82 tekens:
@@ -1014,6 +1109,75 @@ mod tests {
             "https://x-access-token:***@github.com/org/repo.git"
         );
         assert!(!redact_secrets(&as_password).contains(GHP));
+    }
+
+    #[test]
+    fn pct_encoded_colon_as_the_only_userinfo_separator_is_masked() {
+        // breaktest-symlog-0003 bevinding 2: `%3A` i.p.v. een rauwe `:` liet het
+        // wachtwoord staan omdat `is_url_user_byte` `%` toestaat en de naam dan
+        // doorloopt tot de rauwe `@`.
+        assert_eq!(
+            redact_secrets("https://user%3As3cret-pass@host.example/a"),
+            "https://user%3A***@host.example/a"
+        );
+        assert!(
+            !redact_secrets("https://user%3As3cret-pass@host.example/a").contains("s3cret-pass")
+        );
+    }
+
+    #[test]
+    fn pct_encoded_at_as_the_only_userinfo_separator_is_masked() {
+        assert_eq!(
+            redact_secrets("https://user:s3cret-pass%40host.example/a"),
+            "https://user:***%40host.example/a"
+        );
+        assert!(
+            !redact_secrets("https://user:s3cret-pass%40host.example/a").contains("s3cret-pass")
+        );
+    }
+
+    #[test]
+    fn pct_in_password_does_not_shift_the_real_at_boundary() {
+        // Controle uit het rapport: een rauwe `:` én `@` blijven de echte
+        // scheiding; een `%40` middenin het wachtwoord mag die niet naar voren
+        // trekken.
+        assert_eq!(
+            redact_secrets("https://user:s3cret-pass%40extra@host.example/a"),
+            "https://user:***@host.example/a"
+        );
+    }
+
+    #[test]
+    fn pct_encoded_ghp_prefix_in_url_username_is_masked() {
+        let with_password =
+            "https://%67hp_abcdefghijklmnopqrstuvwxyz0123456789:x@github.com/org/repo.git";
+        assert_eq!(
+            redact_secrets(with_password),
+            "https://***:***@github.com/org/repo.git"
+        );
+
+        let bare = "https://%67hp_abcdefghijklmnopqrstuvwxyz0123456789@github.com/org/repo.git";
+        assert_eq!(redact_secrets(bare), "https://***@github.com/org/repo.git");
+    }
+
+    #[test]
+    fn pct_encoded_byte_inside_ghp_body_is_masked() {
+        let input =
+            "https://ghp_abcdefghij%41abcdefghijklmnopqrstuvwxyz0123456789:x@github.com/org/repo.git";
+        assert_eq!(
+            redact_secrets(input),
+            "https://***:***@github.com/org/repo.git"
+        );
+    }
+
+    #[test]
+    fn pct_encoded_ghp_prefix_entirely_is_masked() {
+        let input =
+            "https://%67%68%70%5Fabcdefghijklmnopqrstuvwxyz0123456789:x@github.com/org/repo.git";
+        assert_eq!(
+            redact_secrets(input),
+            "https://***:***@github.com/org/repo.git"
+        );
     }
 
     #[test]
