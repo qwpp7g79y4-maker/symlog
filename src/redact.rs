@@ -832,7 +832,10 @@ fn match_key_ignore_ascii(bytes: &[u8], i: usize, key: &str) -> Option<usize> {
 }
 
 fn is_invisible_format(ch: char) -> bool {
-    matches!(ch, '\u{200B}' | '\u{200C}' | '\u{FEFF}')
+    matches!(
+        ch,
+        '\u{200B}' | '\u{200C}' | '\u{FEFF}' | '\u{00AD}' | '\u{2060}' | '\u{180E}'
+    )
 }
 
 /// Aaneengesloten U+200B, U+200C en U+FEFF. Stopt op het eerste andere teken,
@@ -889,7 +892,8 @@ fn skip_ascii_ws(bytes: &[u8], mut j: usize) -> usize {
 }
 
 /// Scheiding tussen `Bearer` en het token. Naast spatie en tab ook CR, LF, FF,
-/// VT, NBSP en de onzichtbare format-tekens U+200B, U+200C en U+FEFF.
+/// VT, NBSP en de onzichtbare format-tekens U+200B, U+200C, U+FEFF, U+00AD,
+/// U+2060 en U+180E.
 fn skip_bearer_gap(bytes: &[u8], mut j: usize) -> usize {
     while let Some((ch, len)) = decode_char(bytes, j) {
         if ch.is_ascii_whitespace()
@@ -1875,6 +1879,39 @@ mod tests {
             assert!(
                 !redact_secrets(&input).contains("opaque-token-654"),
                 "{input:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn soft_hyphen_word_joiner_and_mongolian_vowel_separator_do_not_leak() {
+        // symlog-invischeck-0001, bevinding 1. `is_invisible_format` kende
+        // alleen U+200B, U+200C en U+FEFF, dus U+00AD, U+2060 en U+180E tussen
+        // `Bearer` en het token (via `skip_bearer_gap`) en tussen `=` en de
+        // waarde (via `skip_ascii_ws`) sloegen niet mee en lieten het geheim
+        // ongemaskeerd staan.
+        for mark in ['\u{00ad}', '\u{2060}', '\u{180e}'] {
+            let bearer = format!("Authorization: Bearer{mark}opaque-token-999");
+            let bearer_expected = format!("Authorization: Bearer{mark}***");
+            assert_eq!(redact_secrets(&bearer), bearer_expected, "{bearer:?}");
+            let shown = for_display(&bearer, true);
+            assert!(shown.contains("***"), "{bearer:?} -> {shown:?}");
+            assert!(
+                !shown.contains("opaque-token-999"),
+                "{bearer:?} -> {shown:?}"
+            );
+
+            let assign = format!("token={mark}opaque-token-999");
+            let assign_expected = format!("token={mark}***");
+            assert_eq!(redact_secrets(&assign), assign_expected, "{assign:?}");
+            let assign_shown = for_display(&assign, true);
+            assert!(
+                assign_shown.contains("***"),
+                "{assign:?} -> {assign_shown:?}"
+            );
+            assert!(
+                !assign_shown.contains("opaque-token-999"),
+                "{assign:?} -> {assign_shown:?}"
             );
         }
     }
