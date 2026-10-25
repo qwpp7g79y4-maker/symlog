@@ -369,11 +369,12 @@ fn colon_sep_len_before(bytes: &[u8], start: usize, end: usize) -> Option<usize>
 
 /// Zelfde idee voor de grens tussen wachtwoord en host (`@` of `%40`).
 fn userinfo_at(bytes: &[u8], pass_start: usize) -> Option<(usize, usize)> {
-    // CR en tab direct na de `:` lieten `is_url_pass_byte` meteen stoppen
-    // (het zijn ASCII-witruimte), waardoor de leeg-check hieronder faalde en
-    // het wachtwoord erna ongemaskeerd bleef. Sla ze over vóór die check.
+    // CR, LF, FF en tab direct na de `:` lieten `is_url_pass_byte` meteen
+    // stoppen (het zijn ASCII-witruimte), waardoor de leeg-check hieronder
+    // faalde en het wachtwoord erna ongemaskeerd bleef. Sla ze over vóór die
+    // check.
     let mut k = pass_start;
-    while k < bytes.len() && matches!(bytes[k], b'\r' | b'\t') {
+    while k < bytes.len() && matches!(bytes[k], b'\r' | b'\n' | b'\x0C' | b'\t') {
         k += 1;
     }
     let value_start = k;
@@ -2029,12 +2030,14 @@ mod tests {
     }
 
     #[test]
-    fn cr_and_tab_between_colon_and_url_password_do_not_leak() {
-        // symlog-crlfcheck-0001, bevinding 3. `is_url_pass_byte` sluit ASCII-
-        // witruimte uit, dus een CR of tab direct na de `:` liet `userinfo_at`
+    fn cr_lf_ff_vt_tab_between_colon_and_url_password_do_not_leak() {
+        // symlog-crlffixrev-0001, bevinding 2. `is_url_pass_byte` sluit ASCII-
+        // witruimte uit, dus een stuurteken direct na de `:` liet `userinfo_at`
         // meteen op de leeg-check stranden en `match_url_userinfo` gaf de hele
-        // match op, waardoor het wachtwoord erna ongemaskeerd bleef.
-        for gap in ['\r', '\t'] {
+        // match op, waardoor het wachtwoord erna ongemaskeerd bleef. CR en tab
+        // waren al gedicht; LF en FF nog niet. VT is geen ASCII-witruimte
+        // (`u8::is_ascii_whitespace`) en raakte dus nooit de leeg-check.
+        for gap in ['\r', '\n', '\x0C', '\x0B', '\t'] {
             let input = format!("https://user:{gap}opaque-token-999@host.example/a");
             let expected = "https://user:***@host.example/a";
             assert_eq!(redact_secrets(&input), expected, "{input:?}");

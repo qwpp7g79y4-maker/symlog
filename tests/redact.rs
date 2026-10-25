@@ -699,12 +699,18 @@ fn plain_output_masks_bearer_after_cr_lf_ff_vt_following_colon() {
 }
 
 #[test]
-fn plain_output_masks_url_password_after_cr_or_tab() {
-    // symlog-crlffix-0001, sluit bevinding 3 uit symlog-crlfcheck-0001: CR en
-    // tab tussen `:` en het wachtwoord in URL-userinfo lieten `userinfo_at`
-    // meteen op de leeg-check stranden (ASCII-witruimte voor `is_url_pass_byte`).
+fn plain_output_masks_url_password_after_cr_ff_vt_or_tab() {
+    // symlog-crlffixrev-0001, bevinding 2: FF tussen `:` en het wachtwoord in
+    // URL-userinfo liet `userinfo_at` meteen op de leeg-check stranden
+    // (ASCII-witruimte voor `is_url_pass_byte`), net als CR en tab eerder
+    // (symlog-crlffix-0001). VT is geen ASCII-witruimte en zat hier al nooit
+    // vast. LF ontbreekt hier bewust, zelfde reden als bij
+    // `plain_output_masks_bearer_after_cr_lf_ff_vt_following_colon` hierboven:
+    // een losse `\n` binnen de monolog-boodschap laat de regelkop-parser het
+    // vervolg niet tonen. Die zit alleen in de `redact::tests`-variant in
+    // `src/redact.rs`, rechtstreeks op `redact_secrets`.
     let pass = "opaque-pass-crlf-0001";
-    for gap in ['\r', '\t'] {
+    for gap in ['\r', '\x0C', '\x0B', '\t'] {
         let message = format!("connect https://user:{gap}{pass}@host.example/a done");
         assert_plain_masks_token(&message, pass, &["https://user:***@host.example/a", "done"]);
     }
