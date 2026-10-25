@@ -908,13 +908,18 @@ fn skip_ws_and_format(bytes: &[u8], mut j: usize) -> usize {
     }
 }
 
-/// Spatie, tab, CR, LF, FF, en U+200B, U+200C, U+FEFF. Alleen ná `=`/`:`,
+/// Spatie, tab, CR, LF, FF, VT, en U+200B, U+200C, U+FEFF. Alleen ná `=`/`:`,
 /// vóór de waarde. Een format-teken is geen ASCII-witruimte; zonder deze tak
 /// maskeert `scan_unquoted` alleen dat teken en blijft de gequote waarde staan.
+/// VT (`\u{000B}`) is evenmin ASCII-witruimte volgens `is_ascii_whitespace`
+/// (zie `skip_bearer_gap`, die dat gat al dicht ná `Bearer`): zonder deze tak
+/// is VT vóór een gequote waarde geen `is_unquoted_delimiter`-byte, waardoor
+/// `scan_unquoted` stopt op het openende aanhalingsteken en alleen VT zelf
+/// maskeert terwijl de rest van de gequote waarde ongemaskeerd blijft staan.
 /// Stopt op het eerste andere teken.
 fn skip_ascii_ws(bytes: &[u8], mut j: usize) -> usize {
     while j < bytes.len() {
-        if bytes[j].is_ascii_whitespace() {
+        if bytes[j].is_ascii_whitespace() || bytes[j] == b'\x0B' {
             j += 1;
             continue;
         }
@@ -2032,6 +2037,29 @@ mod tests {
         for gap in ['\r', '\t'] {
             let input = format!("https://user:{gap}opaque-token-999@host.example/a");
             let expected = "https://user:***@host.example/a";
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            let shown = for_display(&input, true);
+            assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+            assert!(
+                !shown.contains("opaque-token-999"),
+                "{input:?} -> {shown:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn cr_lf_ff_vt_tab_after_assignment_do_not_leak_a_quoted_value() {
+        // symlog-assignvtfix-0001. CR, LF en FF zijn al ASCII-witruimte
+        // (`u8::is_ascii_whitespace`) en werden door `skip_ascii_ws` al
+        // overgeslagen. VT (`\u{000B}`) is dat niet: zonder VT in
+        // `skip_ascii_ws` bleef die vóór een gequote waarde staan,
+        // `scan_unquoted` stopte dan op het openende aanhalingsteken (dat is
+        // wel een `is_unquoted_delimiter`-byte) en maskeerde alleen het VT-
+        // teken zelf, waardoor de gequote waarde erna ongemaskeerd bleef:
+        // `token=\u{B}"opaque-token-999"` -> `token=***"opaque-token-999"`.
+        for gap in ['\r', '\n', '\x0C', '\x0B', '\t'] {
+            let input = format!("token={gap}\"opaque-token-999\"");
+            let expected = format!("token={gap}\"***\"");
             assert_eq!(redact_secrets(&input), expected, "{input:?}");
             let shown = for_display(&input, true);
             assert!(shown.contains("***"), "{input:?} -> {shown:?}");
