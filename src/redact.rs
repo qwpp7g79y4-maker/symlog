@@ -940,16 +940,13 @@ fn skip_ascii_ws(bytes: &[u8], mut j: usize) -> usize {
     j
 }
 
-/// Scheiding tussen `Bearer` en het token. Naast spatie en tab ook CR, LF, FF,
-/// VT, NBSP en de onzichtbare format-tekens U+200B, U+200C, U+FEFF, U+00AD,
-/// U+2060 en U+180E.
+/// Scheiding tussen `Bearer` en het token. Alle witruimte volgens
+/// `char::is_whitespace` (ASCII-witruimte, NBSP, VT, en ook U+0085, U+2028 en
+/// U+2029 — symlog-unisepfix-0001) en de onzichtbare format-tekens U+200B,
+/// U+200C, U+FEFF, U+00AD, U+2060 en U+180E.
 fn skip_bearer_gap(bytes: &[u8], mut j: usize) -> usize {
     while let Some((ch, len)) = decode_char(bytes, j) {
-        if ch.is_ascii_whitespace()
-            || ch == '\u{000B}'
-            || ch == '\u{00A0}'
-            || is_invisible_format(ch)
-        {
+        if ch.is_whitespace() || is_invisible_format(ch) {
             j += len;
         } else {
             break;
@@ -2146,6 +2143,46 @@ mod tests {
                     !shown.contains("opaque-token-999"),
                     "{input:?} -> {shown:?}"
                 );
+            }
+        }
+    }
+
+    #[test]
+    fn nel_line_separator_and_paragraph_separator_do_not_leak_bearer() {
+        // symlog-unisepcheck-0001. `skip_bearer_gap` kent `is_ascii_whitespace`,
+        // VT, NBSP en `is_invisible_format`, maar niet de Unicode-
+        // witruimtetekens U+0085 (NEL), U+2028 (LINE SEPARATOR) en U+2029
+        // (PARAGRAPH SEPARATOR): die zijn geen ASCII-witruimte en staan niet in
+        // `is_invisible_format`. Tussen `Bearer` en het token lieten ze
+        // `value_start == j` gelden en gaf `match_bearer` de hele match op,
+        // waardoor het token ongemaskeerd bleef.
+        for sep in ['\u{85}', '\u{2028}', '\u{2029}'] {
+            let input = format!("Authorization: Bearer{sep}opaque-token-999");
+            let expected = format!("Authorization: Bearer{sep}***");
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            let shown = for_display(&input, true);
+            assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+            assert!(
+                !shown.contains("opaque-token-999"),
+                "{input:?} -> {shown:?}"
+            );
+
+            // Afwisselend met een aanhalingsteken ná de `:` en een ASCII-
+            // stuurteken (vóór en ná de Unicode-scheider), net als
+            // `quote_then_control_char_before_bearer_does_not_leak`.
+            for quote in ['"', '\''] {
+                for ctl in ['\r', '\n', '\x0C', '\x0B', '\t'] {
+                    let input =
+                        format!("Authorization:{quote}{sep}{ctl}Bearer opaque-token-999{quote}");
+                    let expected = format!("Authorization:{quote}{sep}{ctl}Bearer ***{quote}");
+                    assert_eq!(redact_secrets(&input), expected, "{input:?}");
+                    let shown = for_display(&input, true);
+                    assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+                    assert!(
+                        !shown.contains("opaque-token-999"),
+                        "{input:?} -> {shown:?}"
+                    );
+                }
             }
         }
     }
