@@ -54,8 +54,9 @@ pub fn redact_secrets(input: &str) -> String {
     let bytes = input.as_bytes();
     let mut out = String::with_capacity(input.len());
     let mut i = 0;
+    let mut jwt_run_cache = B64UrlRunCache::new();
     while i < bytes.len() {
-        if let Some(span) = match_at(bytes, i) {
+        if let Some(span) = match_at(bytes, i, &mut jwt_run_cache) {
             if span_is_usable(i, bytes.len(), &span) {
                 // `match_url_userinfo` laat de gebruikersnaam staan en maskeert alleen
                 // het wachtwoord. Staat in die naam een hoog-risico token, ook ná een
@@ -89,7 +90,7 @@ fn span_is_usable(start: usize, len: usize, span: &Span) -> bool {
         && span.resume <= len
 }
 
-fn match_at(bytes: &[u8], i: usize) -> Option<Span> {
+fn match_at(bytes: &[u8], i: usize, jwt_run_cache: &mut B64UrlRunCache) -> Option<Span> {
     // Userinfo vóór sleutel-waarde: anders eet `password` in
     // `https://password:geheim@host` de rest van de URL op.
     // Een token als gebruikersnaam wordt in de uitvoer alsnog gemaskeerd
@@ -98,23 +99,32 @@ fn match_at(bytes: &[u8], i: usize) -> Option<Span> {
     match_url_userinfo(bytes, i)
         .or_else(|| match_assignment(bytes, i))
         .or_else(|| match_bearer(bytes, i))
-        .or_else(|| match_high_risk_token(bytes, i))
+        .or_else(|| match_high_risk_token(bytes, i, jwt_run_cache))
 }
 
-fn match_high_risk_token(bytes: &[u8], i: usize) -> Option<Span> {
-    find_high_risk_token(bytes, i, true)
+fn match_high_risk_token(
+    bytes: &[u8],
+    i: usize,
+    jwt_run_cache: &mut B64UrlRunCache,
+) -> Option<Span> {
+    find_high_risk_token(bytes, i, true, jwt_run_cache)
 }
 
 /// `require_boundary` geldt in vrije tekst, zodat een token midden in een woord
 /// blijft staan. In een URL-gebruikersnaam is de grens al `://` … `:`, en mag
 /// het token ná een voorvoegsel staan.
-fn find_high_risk_token(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
+fn find_high_risk_token(
+    bytes: &[u8],
+    i: usize,
+    require_boundary: bool,
+    jwt_run_cache: &mut B64UrlRunCache,
+) -> Option<Span> {
     match_stripe(bytes, i)
         .or_else(|| match_akia(bytes, i))
         .or_else(|| match_github_pat(bytes, i, require_boundary))
         .or_else(|| match_ghp(bytes, i, require_boundary))
         .or_else(|| match_xoxb(bytes, i, require_boundary))
-        .or_else(|| match_jwt(bytes, i, require_boundary))
+        .or_else(|| match_jwt(bytes, i, require_boundary, jwt_run_cache))
 }
 
 /// `scheme://<naam>:wachtwoord@host`, waarbij in `<naam>` een hoog-risico token
@@ -534,24 +544,64 @@ fn match_xoxb(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
 /// punt hoort niet bij een JWT.
 const JWT_SEGMENT_MIN: usize = 16;
 
-fn match_jwt(bytes: &[u8], i: usize, require_boundary: bool) -> Option<Span> {
+/// Onthoudt het einde van de laatst gescande base64url-run (zoals `scan_while`
+/// met `is_b64url_byte` die zou opleveren), zodat een latere kandidaat die
+/// binnen diezelfde run begint niet opnieuw tot het eind van de run scant.
+/// Zonder dit geheugen scant `match_jwt` op een vrije regel vol herhaald
+/// `-eyJ` bij elke `-` opnieuw tot het regeleinde: `-` is zelf een
+/// base64url-byte, dus zonder punt in de run groeit dat tot O(n²). Dezelfde
+/// aanpak als `b64url_run_ends`, maar lui gevuld i.p.v. in één tabel vooraf,
+/// omdat hier (anders dan bij een URL-gebruikersnaam) geen vaste einde-grens
+/// vooraf bekend is.
+struct B64UrlRunCache {
+    start: usize,
+    end: usize,
+}
+
+impl B64UrlRunCache {
+    fn new() -> Self {
+        Self { start: 0, end: 0 }
+    }
+
+    /// Eerste positie `>= i` die geen base64url-byte is. Valt `i` binnen de
+    /// laatst gescande run, dan is dat antwoord al bekend (de hele run tussen
+    /// `start` en `end` is toen al als base64url bevestigd, dus elk deel
+    /// daarvan geldt nog); anders scant dit opnieuw vanaf `i` en onthoudt het
+    /// resultaat.
+    fn end_from(&mut self, bytes: &[u8], i: usize) -> usize {
+        if self.start <= i && i < self.end {
+            return self.end;
+        }
+        let end = scan_while(bytes, i, is_b64url_byte);
+        self.start = i;
+        self.end = end;
+        end
+    }
+}
+
+fn match_jwt(
+    bytes: &[u8],
+    i: usize,
+    require_boundary: bool,
+    jwt_run_cache: &mut B64UrlRunCache,
+) -> Option<Span> {
     if require_boundary && !at_jwt_boundary(bytes, i) {
         return None;
     }
     if !bytes[i..].starts_with(b"eyJ") {
         return None;
     }
-    let end1 = scan_while(bytes, i, is_b64url_byte);
+    let end1 = jwt_run_cache.end_from(bytes, i);
     if end1 - i < JWT_SEGMENT_MIN || !dot_at(bytes, end1) {
         return None;
     }
     let start2 = end1 + 1;
-    let end2 = scan_while(bytes, start2, is_b64url_byte);
+    let end2 = jwt_run_cache.end_from(bytes, start2);
     if end2 - start2 < JWT_SEGMENT_MIN || !dot_at(bytes, end2) {
         return None;
     }
     let start3 = end2 + 1;
-    let end3 = scan_while(bytes, start3, is_b64url_byte);
+    let end3 = jwt_run_cache.end_from(bytes, start3);
     if end3 - start3 < JWT_SEGMENT_MIN {
         return None;
     }
@@ -1740,5 +1790,35 @@ mod tests {
             !shown.contains("opaque-token-999"),
             "{input:?} -> {shown:?}"
         );
+    }
+
+    #[test]
+    fn free_text_dash_eyj_filler_scan_stays_linear_and_real_jwt_still_masked() {
+        // breaktest-symlog-0003, bevinding 4. `-` is zelf een base64url-byte, dus
+        // `at_jwt_boundary` laat een kandidaat ná elke `-` beginnen, en zonder
+        // geheugen scande `match_jwt` elke kandidaat opnieuw tot het regeleinde:
+        // O(n^2) op een vrije regel vol herhaald `-eyJ`. Deze lijn heeft geen punt,
+        // dus geen van de kandidaten matcht; de uitvoer moet gelijk aan de invoer
+        // blijven.
+        let filler = "-eyJ".repeat(50_000); // 200 000 bytes
+        let start = std::time::Instant::now();
+        let out = redact_secrets(&filler);
+        let elapsed = start.elapsed();
+        assert_eq!(out, filler, "vrije -eyJ-vulling mag niet veranderen");
+        assert!(
+            elapsed < std::time::Duration::from_millis(2000),
+            "redact_secrets nam {elapsed:?} voor {} bytes vrije -eyJ-vulling: \
+             kwadratische blow-up in match_jwt",
+            filler.len()
+        );
+
+        // Een echte (fictieve) JWT ertussen moet nog steeds gemaskeerd worden.
+        let jwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\
+                   .eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIn0\
+                   .SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c";
+        let input = format!("log line before {jwt} log line after");
+        let masked = redact_secrets(&input);
+        assert!(masked.contains("***"), "{input:?} -> {masked:?}");
+        assert!(!masked.contains(jwt), "{input:?} -> {masked:?}");
     }
 }
