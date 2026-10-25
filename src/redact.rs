@@ -985,16 +985,29 @@ fn skip_bearer_gap(bytes: &[u8], mut j: usize) -> usize {
 }
 
 /// Zoals `skip_inline_ws`, maar ook een los stuurteken (NUL, `\v`, `\f`, een
-/// non-breaking space, …) of een onzichtbaar format-teken (U+200B, U+200C,
-/// U+FEFF) tussen de sleutelnaam en `=`/`:` wordt overgeslagen. Zonder dit geeft
-/// `match_assignment`/`match_bearer` de match stil op zodra zo'n byte in de weg
-/// staat, en blijft de waarde erna ongemaskeerd. `\n`/`\r` tellen niet mee: die
-/// horen bij regelstructuur, niet bij een verdwaald stuurteken.
+/// non-breaking space, …), `\n`/`\r`, of een onzichtbaar format-teken
+/// (U+200B, U+200C, U+FEFF) tussen de sleutelnaam en `=`/`:` wordt
+/// overgeslagen. Zonder dit geeft `match_assignment`/`match_bearer` de match
+/// stil op zodra zo'n byte in de weg staat, en blijft de waarde erna
+/// ongemaskeerd.
+///
+/// Afweging (symlog-authcrlf-0001, breaktest-symlog-0005 bevinding 1): `\n`/
+/// `\r` sloeg deze functie vóór die fix bewust niet over ("die horen bij
+/// regelstructuur, niet bij een verdwaald stuurteken"), zodat `Authorization`
+/// aan het eind van de ene regel en `:` aan het begin van de volgende niet
+/// als één match telden. Maar CR of LF tussen sleutelnaam en `=`/`:` liet de
+/// hele waarde ongemaskeerd (zie `cr_lf_and_crlf_between_key_and_operator_
+/// do_not_bypass_redaction`), en dat sluit zich niet contextvrij uit van het
+/// geval waarin zo'n teken wel overgeslagen moet worden: een losse `\n`/`\r`
+/// vóór een echte scheider is byte voor byte gelijk, of die nu per ongeluk
+/// een nieuwe regel begint of niet. Net als bij `userinfo_at`
+/// (symlog-urlnlatfix-0001) gaat lekken dichten voor onterechte maskering:
+/// `\n`/`\r` tellen nu wel mee (via `ch.is_control()` hieronder), met het
+/// gevolg dat een sleutelnaam gevolgd door een toevallige regel die direct op
+/// `=`/`:` uitkomt nu ook matcht (zie
+/// `key_then_newline_with_unrelated_colon_on_next_line_stays_masked`).
 fn skip_key_operator_gap(bytes: &[u8], mut j: usize) -> usize {
     while let Some((ch, len)) = decode_char(bytes, j) {
-        if matches!(ch, '\n' | '\r') {
-            break;
-        }
         if ch == ' '
             || ch == '\t'
             || ch.is_whitespace()
@@ -2266,5 +2279,53 @@ mod tests {
                 assert_eq!(redact_secrets(&input_both), expected_both, "{input_both:?}");
             }
         }
+    }
+
+    #[test]
+    fn cr_lf_and_crlf_between_key_and_operator_do_not_bypass_redaction() {
+        // symlog-authcrlf-0001, breaktest-symlog-0005 bevinding 1.
+        // `skip_key_operator_gap` stopte expliciet op `\n`/`\r` ("die horen bij
+        // regelstructuur, niet bij een verdwaald stuurteken"), waardoor zo'n
+        // teken tussen de sleutelnaam en `=`/`:` de hele match in
+        // `match_assignment`/`match_bearer` liet opgeven en de waarde erna
+        // ongemaskeerd bleef.
+        for sep in ["\r", "\n", "\r\n"] {
+            for input in [
+                format!("password{sep}=hunter2"),
+                format!("apikey{sep}:rawkeyvalue"),
+                format!("Authorization{sep}: Bearer opaque-token-999"),
+            ] {
+                let out = redact_secrets(&input);
+                assert!(
+                    out.contains("***"),
+                    "geheim lekt door CR/LF vóór de scheider: {input:?} -> {out:?}"
+                );
+                assert!(
+                    !out.contains("hunter2")
+                        && !out.contains("rawkeyvalue")
+                        && !out.contains("opaque-token-999"),
+                    "{input:?} -> {out:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn key_then_newline_with_unrelated_colon_on_next_line_stays_masked() {
+        // Afweging (symlog-authcrlf-0001), zelfde soort als
+        // `user_colon_then_newline_with_unrelated_at_on_next_line_stays_masked`
+        // voor `userinfo_at`: de `\n`/`\r` die `skip_key_operator_gap` nu
+        // overslaat tussen sleutelnaam en `=`/`:`, is ook een gewone
+        // regelscheiding. Staat er na een losse sleutelnaam toevallig een
+        // regel die direct op `:` uitkomt (geen spatie ervoor, geen eigen
+        // sleutel), dan matcht dit over de regelgrens heen en wordt
+        // ongerelateerde tekst gemaskeerd. Dat is geen geheimenlek, alleen
+        // onterechte maskering; byte voor byte niet te onderscheiden van het
+        // gedichte lek hierboven (dezelfde losse `\n` vóór een echte waarde),
+        // dus bewust ongewijzigd: lekken dichten gaat voor onterechte
+        // maskering.
+        let input = "the secret\n: unrelated line kept for context";
+        let expected = "the secret\n: *** line kept for context";
+        assert_eq!(redact_secrets(input), expected);
     }
 }
