@@ -273,14 +273,19 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
     j += 1;
     // CR, LF, FF en VT ná `:` lieten de match stuklopen: skip_quotes kent via
     // skip_ws_and_format alleen spatie en tab. skip_bearer_gap slaat die vier,
-    // net als NBSP en de onzichtbare format-tekens, wel over.
-    j = skip_bearer_gap(bytes, j);
-    // Ná `:` en vóór het openende aanhalingsteken van een gequote
-    // Bearer-waarde kunnen witruimte, U+200B/U+200C/U+FEFF en een overbodig
-    // herhaald aanhalingsteken afgewisseld voorkomen (bv. format, spatie,
-    // format, quote, quote). `skip_quotes` blijft al die soorten afwisselen
-    // tot er niets meer overblijft om over te slaan.
-    j = skip_quotes(bytes, j);
+    // net als NBSP en de onzichtbare format-tekens, wel over. Staat er een
+    // aanhalingsteken vóór zo'n stuurteken (skip_bearer_gap slaat geen quote
+    // over, skip_quotes geen stuurteken), dan moeten de twee afwisselen tot
+    // geen van beide nog iets overslaat - net als skip_quotes dat intern al
+    // doet voor witruimte/format vs. aanhalingstekens.
+    loop {
+        let before = j;
+        j = skip_bearer_gap(bytes, j);
+        j = skip_quotes(bytes, j);
+        if j == before {
+            break;
+        }
+    }
     const BEARER: &str = "bearer";
     let j = match_key_ignore_ascii(bytes, j, BEARER)?;
     // Spatie en tab werkten al. CR, VT, FF, NBSP en U+200B/U+200C/U+FEFF
@@ -2070,6 +2075,31 @@ mod tests {
                 !shown.contains("opaque-token-999"),
                 "{input:?} -> {shown:?}"
             );
+        }
+    }
+
+    #[test]
+    fn quote_then_control_char_before_bearer_does_not_leak() {
+        // symlog-crlffixrev-0001, bevinding 3. `match_bearer` deed na de `:`
+        // eerst `skip_bearer_gap` en dan `skip_quotes`, elk precies één keer.
+        // Staat er een aanhalingsteken vóór het stuurteken, dan slikt
+        // `skip_bearer_gap` niets (het is geen witruimte/format), `skip_quotes`
+        // slikt daarna het aanhalingsteken maar struikelt op het stuurteken
+        // erna (ook geen witruimte/format of aanhalingsteken), en
+        // `match_key_ignore_ascii` mist `Bearer` zodra de hele match wordt
+        // opgegeven.
+        for quote in ['"', '\''] {
+            for gap in ['\r', '\n', '\x0C', '\x0B', '\t'] {
+                let input = format!("Authorization:{quote}{gap}Bearer opaque-token-999{quote}");
+                let expected = format!("Authorization:{quote}{gap}Bearer ***{quote}");
+                assert_eq!(redact_secrets(&input), expected, "{input:?}");
+                let shown = for_display(&input, true);
+                assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+                assert!(
+                    !shown.contains("opaque-token-999"),
+                    "{input:?} -> {shown:?}"
+                );
+            }
         }
     }
 }
