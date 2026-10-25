@@ -187,6 +187,14 @@ fn run_plain_mode(
         let _ = writeln!(err_out, "{}: {err}", path.display());
         return startup::EXIT_IO_ERROR;
     }
+    if !follow {
+        // Een eenmalige run groeit nooit meer verder: sluit de generatie af zodat een
+        // staartregel zonder afsluitende `\n` alsnog verschijnt (geredigeerd), net als
+        // de TUI-weg via `IndexScanner::finish` (breaktest-symlog-0004 bevinding 1).
+        // Met `--follow` blijft dit ongewijzigd: `Follower::finish` wordt dan bewust
+        // niet aangeroepen, zie het commentaar daar.
+        follower.finish();
+    }
     if let Err(err) = printer.flush(&follower, filter, colors_enabled, out) {
         let _ = writeln!(err_out, "{}: {err}", path.display());
         if !follow {

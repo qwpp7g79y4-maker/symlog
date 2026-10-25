@@ -498,6 +498,22 @@ impl Follower {
         &self.separators
     }
 
+    /// Sluit de actieve generatie af alsof ze nooit meer kan groeien (zoals
+    /// [`Generation::finish`] dat al bij rotatie voor de oude generatie deed, task.md
+    /// T10 stap 2): een onvolledige laatste regel wordt zo alsnog een gewoon,
+    /// zichtbaar record (via [`IndexScanner::finish`]), precies zoals [`build_index`]
+    /// dat voor de TUI-weg bij echte EOF al deed. Bedoeld voor een eenmalige run
+    /// zonder `--follow` (breaktest-symlog-0004 bevinding 1): daar komt nooit meer
+    /// bij, dus er is geen risico dat een later aangevulde regel dubbel verschijnt.
+    /// Met `--follow` blijft de generatie bewust onaangeroerd (niet aangeroepen): een
+    /// nog onvolledige staartregel moet daar kunnen blijven groeien zonder dat de
+    /// timeout/verdubbel-afweging van [`Follower::tail`] verstoord wordt.
+    pub fn finish(&mut self) {
+        if let Some(gen) = self.current.as_mut() {
+            gen.finish();
+        }
+    }
+
     /// De onvolledige laatste regel van de actieve generatie, als die er is (task.md
     /// T10 "Doet"). Puur afgeleid van in-memory toestand (de scanner houdt deze
     /// bytes al vast): geen bestandstoegang nodig.

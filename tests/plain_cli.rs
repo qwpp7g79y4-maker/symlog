@@ -83,6 +83,33 @@ fn level_and_channel_filtered_plain_output_matches_golden() {
     );
 }
 
+/// Een eenmalige plain-run (geen `--follow`) laat de staartregel zonder afsluitende
+/// `\n` niet stil verdwijnen (breaktest-symlog-0004 bevinding 1 kritiek): die regel
+/// moet, net als de TUI-weg via `IndexScanner::finish`, alsnog verschijnen — en
+/// geheimen erin blijven gemaskeerd.
+#[test]
+fn plain_mode_without_follow_shows_unterminated_tail_line_redacted() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let path = dir.path().join("app.log");
+    write_file(
+        &path,
+        b"[2026-01-01 00:00:00] a.INFO: one [] []\n\
+          [2026-01-01 00:00:01] a.INFO: tail token=abc123secretvalue [] []",
+    );
+
+    let assert = Command::cargo_bin("symlog")
+        .expect("binary")
+        .arg(&path)
+        .assert()
+        .success();
+    let stdout = String::from_utf8(assert.get_output().stdout.clone()).expect("utf8");
+    assert_eq!(
+        stdout,
+        "[2026-01-01 00:00:00] a.INFO: one\n\
+         [2026-01-01 00:00:01] a.INFO: tail token=***\n"
+    );
+}
+
 /// `--tui` zonder een tty op stdout geeft exit 3 met een uitleg, in plaats van stil
 /// terug te vallen op plain of te crashen op het aanzetten van raw mode.
 #[test]
