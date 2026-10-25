@@ -376,10 +376,13 @@ fn colon_sep_len_before(bytes: &[u8], start: usize, end: usize) -> Option<usize>
 fn userinfo_at(bytes: &[u8], pass_start: usize) -> Option<(usize, usize)> {
     // CR, LF, FF en tab direct na de `:` lieten `is_url_pass_byte` meteen
     // stoppen (het zijn ASCII-witruimte), waardoor de leeg-check hieronder
-    // faalde en het wachtwoord erna ongemaskeerd bleef. Sla ze over vóór die
-    // check.
+    // faalde en het wachtwoord erna ongemaskeerd bleef. VT is geen ASCII-
+    // witruimte, dus een losse VT werd door `is_url_pass_byte` toevallig wel
+    // als wachtwoordbyte meegenomen — maar gevolgd door een van de andere
+    // vier stopte de wachtwoord-lus na die ene VT, met hetzelfde lek. Sla ze
+    // allemaal, in elke combinatie, over vóór die check.
     let mut k = pass_start;
-    while k < bytes.len() && matches!(bytes[k], b'\r' | b'\n' | b'\x0C' | b'\t') {
+    while k < bytes.len() && matches!(bytes[k], b'\r' | b'\n' | b'\x0C' | b'\x0B' | b'\t') {
         k += 1;
     }
     let value_start = k;
@@ -2053,6 +2056,50 @@ mod tests {
                 "{input:?} -> {shown:?}"
             );
         }
+    }
+
+    #[test]
+    fn vt_combined_with_cr_lf_ff_or_tab_between_colon_and_url_password_do_not_leak() {
+        // symlog-urlvtfix-0001, volgens symlog-lfpassfixrev-0001. Het skip-stel
+        // in `userinfo_at` kent CR, LF, FF en tab maar niet VT (`\x0B`). VT zelf
+        // is geen ASCII-witruimte, dus een losse VT na de `:` wordt door
+        // `is_url_pass_byte` gewoon als (eerste) wachtwoordbyte meegenomen — dat
+        // werkt toevallig. Maar staat er direct na die VT een byte die wél in
+        // het skip-stel zit (CR/LF/FF/tab), dan stopt de wachtwoord-lus na die
+        // ene VT, de leeg-check slaagt dus niet, en de `@`-zoektocht erna vindt
+        // alleen het stuurteken in plaats van het echte wachtwoord: de hele
+        // match wordt opgegeven en het wachtwoord blijft volledig in klare
+        // tekst staan.
+        for gap in [
+            "\u{B}\r",
+            "\u{B}\n",
+            "\u{B}\x0C",
+            "\u{B}\t",
+            "\r\u{B}",
+            "\n\u{B}",
+            "\x0C\u{B}",
+            "\t\u{B}",
+            "\r\u{B}\t",
+        ] {
+            let input = format!("https://user:{gap}opaque-token-999@host.example/a");
+            let expected = "https://user:***@host.example/a";
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            let shown = for_display(&input, true);
+            assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+            assert!(
+                !shown.contains("opaque-token-999"),
+                "{input:?} -> {shown:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn user_colon_then_newline_without_at_is_left_untouched() {
+        // Dezelfde skip-lus mag geen tekst voorbij een afgebroken `user:` + een
+        // nieuwe regel zonder `@` opslokken: zonder een echte scheider is dit
+        // geen URL-userinfo en moet de regel ongemaskeerd blijven.
+        let input = "see https://user:\nopaque-token-999 and more text";
+        assert_eq!(redact_secrets(input), input);
     }
 
     #[test]
