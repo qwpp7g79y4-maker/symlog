@@ -124,10 +124,13 @@ fn url_username_is_high_risk_token(bytes: &[u8], i: usize, span: &Span) -> bool 
     if i < 3 || bytes[i - 3] != b':' || bytes[i - 2] != b'/' || bytes[i - 1] != b'/' {
         return false;
     }
-    if span.keep_end <= i || bytes[span.keep_end - 1] != b':' {
+    if span.keep_end <= i {
         return false;
     }
-    let user_end = span.keep_end - 1;
+    let Some(sep_len) = colon_sep_len_before(bytes, i, span.keep_end) else {
+        return false;
+    };
+    let user_end = span.keep_end - sep_len;
     // Eén tabel voor de hele gebruikersnaam (`b64url_run_ends`) i.p.v. een losse
     // `scan_while` per startpositie: anders scant een naam vol herhaalde
     // `eyJ`-vulling bij ~1 op de 3 posities opnieuw tot het einde, O(n^2).
@@ -331,6 +334,24 @@ fn userinfo_colon(bytes: &[u8], i: usize) -> Option<usize> {
     }
     let pos = find_pct_escape(bytes, i, j, b':')?;
     Some(pos + 3)
+}
+
+/// Lengte van de scheider die eindigt op `end` (exclusief dat punt): `1` voor
+/// een rauwe `:`, `3` voor `%3A` (hoofdletterongevoelig). Spiegelt de keuze die
+/// `userinfo_colon` aan het begin van de scheider maakt, zodat
+/// `url_username_is_high_risk_token` ook de percent-vorm als scheider herkent.
+/// Geen van beide op die positie geeft `None`.
+fn colon_sep_len_before(bytes: &[u8], start: usize, end: usize) -> Option<usize> {
+    if end > start && bytes[end - 1] == b':' {
+        return Some(1);
+    }
+    if end >= start + 3 {
+        let (b, len) = decode_pct_byte(bytes, end - 3);
+        if len == 3 && b == b':' {
+            return Some(3);
+        }
+    }
+    None
 }
 
 /// Zelfde idee voor de grens tussen wachtwoord en host (`@` of `%40`).
@@ -1183,6 +1204,29 @@ mod tests {
             redact_secrets(input),
             "https://***:***@github.com/org/repo.git"
         );
+    }
+
+    #[test]
+    fn ghp_username_with_pct_encoded_colon_separator_is_masked() {
+        // symlog-pctfixrev-0001: `url_username_is_high_risk_token` eiste een
+        // rauwe `:` op `span.keep_end - 1`, maar `userinfo_colon` kan sinds
+        // a923718 ook `%3A` als scheider kiezen (als er geen rauwe `:` in de
+        // naam staat). Dan bleef het ghp_-token in de gebruikersnaam onvervangen
+        // staan terwijl alleen het wachtwoord werd gemaskeerd.
+        let input = format!("https://{GHP}%3Ax@github.com/org/repo.git");
+        assert_eq!(
+            redact_secrets(&input),
+            "https://***:***@github.com/org/repo.git"
+        );
+        assert!(!redact_secrets(&input).contains(GHP));
+
+        // Hoofdletterongevoelig: `%3a` geeft hetzelfde resultaat.
+        let lower = format!("https://{GHP}%3ax@github.com/org/repo.git");
+        assert_eq!(
+            redact_secrets(&lower),
+            "https://***:***@github.com/org/repo.git"
+        );
+        assert!(!redact_secrets(&lower).contains(GHP));
     }
 
     #[test]
