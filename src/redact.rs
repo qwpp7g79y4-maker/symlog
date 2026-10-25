@@ -258,6 +258,11 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
     }
     j += 1;
     j = skip_inline_ws(bytes, j);
+    // U+200B, U+200C of U+FEFF ná `:` en vóór het openende aanhalingsteken
+    // van een gequote Bearer-waarde. `skip_inline_ws` kent alleen spatie/tab,
+    // dus zonder deze tak blijft zo'n teken hier liggen en mist `skip_one_quote`
+    // de quote erna, waardoor de hele match wordt opgegeven.
+    j = skip_invisible_format(bytes, j);
     j = skip_one_quote(bytes, j);
     j = skip_inline_ws(bytes, j);
     const BEARER: &str = "bearer";
@@ -1624,5 +1629,37 @@ mod tests {
         assert_eq!(redact_secrets("hello world"), "hello world");
         assert_eq!(redact_secrets("just a token bucket"), "just a token bucket");
         assert_eq!(redact_secrets("token=\n"), "token=\n");
+    }
+
+    #[test]
+    fn invisible_format_after_colon_before_quoted_bearer_value_does_not_leak() {
+        // symlog-redactfix3rev-0001, bevinding 1. `match_bearer` sloeg na de `:`
+        // alleen spatie/tab over (`skip_inline_ws`), niet U+200B/U+200C/U+FEFF,
+        // waardoor `skip_one_quote` het openende aanhalingsteken miste en de
+        // hele match werd opgegeven.
+        for mark in ['\u{200b}', '\u{200c}', '\u{feff}'] {
+            let direct = format!("\"Authorization\":{mark}\"Bearer opaque-token-999\"");
+            let direct_expected = format!("\"Authorization\":{mark}\"Bearer ***\"");
+            assert_eq!(redact_secrets(&direct), direct_expected, "{direct:?}");
+            let shown = for_display(&direct, true);
+            assert!(shown.contains("***"), "{direct:?} -> {shown:?}");
+            assert!(
+                !shown.contains("opaque-token-999"),
+                "{direct:?} -> {shown:?}"
+            );
+
+            let spaced = format!("\"Authorization\": {mark}\"Bearer opaque-token-999\"");
+            let spaced_expected = format!("\"Authorization\": {mark}\"Bearer ***\"");
+            assert_eq!(redact_secrets(&spaced), spaced_expected, "{spaced:?}");
+            assert!(
+                !for_display(&spaced, true).contains("opaque-token-999"),
+                "{spaced:?}"
+            );
+        }
+
+        assert_eq!(
+            redact_secrets("Authorization: Bearer opaque-token-999"),
+            "Authorization: Bearer ***"
+        );
     }
 }
