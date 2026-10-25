@@ -271,6 +271,10 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
         return None;
     }
     j += 1;
+    // CR, LF, FF en VT ná `:` lieten de match stuklopen: skip_quotes kent via
+    // skip_ws_and_format alleen spatie en tab. skip_bearer_gap slaat die vier,
+    // net als NBSP en de onzichtbare format-tekens, wel over.
+    j = skip_bearer_gap(bytes, j);
     // Ná `:` en vóór het openende aanhalingsteken van een gequote
     // Bearer-waarde kunnen witruimte, U+200B/U+200C/U+FEFF en een overbodig
     // herhaald aanhalingsteken afgewisseld voorkomen (bv. format, spatie,
@@ -365,11 +369,18 @@ fn colon_sep_len_before(bytes: &[u8], start: usize, end: usize) -> Option<usize>
 
 /// Zelfde idee voor de grens tussen wachtwoord en host (`@` of `%40`).
 fn userinfo_at(bytes: &[u8], pass_start: usize) -> Option<(usize, usize)> {
+    // CR en tab direct na de `:` lieten `is_url_pass_byte` meteen stoppen
+    // (het zijn ASCII-witruimte), waardoor de leeg-check hieronder faalde en
+    // het wachtwoord erna ongemaskeerd bleef. Sla ze over vóór die check.
     let mut k = pass_start;
+    while k < bytes.len() && matches!(bytes[k], b'\r' | b'\t') {
+        k += 1;
+    }
+    let value_start = k;
     while k < bytes.len() && is_url_pass_byte(bytes[k]) {
         k += 1;
     }
-    if k == pass_start {
+    if k == value_start {
         return None;
     }
     if k < bytes.len() && bytes[k] == b'@' {
@@ -1988,6 +1999,45 @@ mod tests {
             assert!(
                 !assign_shown.contains("opaque-token-999"),
                 "{assign:?} -> {assign_shown:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn cr_lf_ff_vt_after_colon_do_not_leak_bearer() {
+        // symlog-crlfcheck-0001, bevinding 3. `match_bearer` deed ná de `:`
+        // alleen `skip_quotes`, en die kent via `skip_ws_and_format` enkel
+        // spatie en tab. CR, LF, FF en VT lieten `match_key_ignore_ascii` het
+        // woord `Bearer` missen, waarna de hele match opgegeven werd en het
+        // token ongemaskeerd bleef. `skip_bearer_gap` kent alle vier.
+        for gap in ['\r', '\n', '\u{c}', '\u{b}'] {
+            let input = format!("Authorization:{gap}Bearer opaque-token-999");
+            let expected = format!("Authorization:{gap}Bearer ***");
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            let shown = for_display(&input, true);
+            assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+            assert!(
+                !shown.contains("opaque-token-999"),
+                "{input:?} -> {shown:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn cr_and_tab_between_colon_and_url_password_do_not_leak() {
+        // symlog-crlfcheck-0001, bevinding 3. `is_url_pass_byte` sluit ASCII-
+        // witruimte uit, dus een CR of tab direct na de `:` liet `userinfo_at`
+        // meteen op de leeg-check stranden en `match_url_userinfo` gaf de hele
+        // match op, waardoor het wachtwoord erna ongemaskeerd bleef.
+        for gap in ['\r', '\t'] {
+            let input = format!("https://user:{gap}opaque-token-999@host.example/a");
+            let expected = "https://user:***@host.example/a";
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            let shown = for_display(&input, true);
+            assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+            assert!(
+                !shown.contains("opaque-token-999"),
+                "{input:?} -> {shown:?}"
             );
         }
     }

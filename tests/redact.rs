@@ -680,3 +680,32 @@ fn plain_output_empty_and_broken_urls_do_not_leak_github_pat_or_prefixed_tokens(
     }
     assert!(!shown.contains("***"), "{shown}");
 }
+
+#[test]
+fn plain_output_masks_bearer_after_cr_lf_ff_vt_following_colon() {
+    // symlog-crlffix-0001, sluit bevinding 3 uit symlog-crlfcheck-0001:
+    // CR, LF, FF en VT direct na de `:` en vóór `Bearer` lieten
+    // `match_bearer` de match opgeven, omdat alleen `skip_quotes` (spatie/tab)
+    // ná de `:` werd geprobeerd. LF ontbreekt hier bewust: een losse `\n`
+    // binnen de monolog-boodschap laat de regelkop-parser het vervolg van de
+    // regel (los van deze fix) niet tonen, dus die zit alleen in de
+    // `redact::tests`-variant in `src/redact.rs`, rechtstreeks op
+    // `redact_secrets`.
+    let token = "opaque-token-crlf-0001";
+    for gap in ['\r', '\u{c}', '\u{b}'] {
+        let message = format!("Authorization:{gap}Bearer {token}");
+        assert_plain_masks_token(&message, token, &["Bearer ***"]);
+    }
+}
+
+#[test]
+fn plain_output_masks_url_password_after_cr_or_tab() {
+    // symlog-crlffix-0001, sluit bevinding 3 uit symlog-crlfcheck-0001: CR en
+    // tab tussen `:` en het wachtwoord in URL-userinfo lieten `userinfo_at`
+    // meteen op de leeg-check stranden (ASCII-witruimte voor `is_url_pass_byte`).
+    let pass = "opaque-pass-crlf-0001";
+    for gap in ['\r', '\t'] {
+        let message = format!("connect https://user:{gap}{pass}@host.example/a done");
+        assert_plain_masks_token(&message, pass, &["https://user:***@host.example/a", "done"]);
+    }
+}
