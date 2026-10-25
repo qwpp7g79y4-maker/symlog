@@ -222,9 +222,11 @@ fn match_assignment(bytes: &[u8], i: usize) -> Option<Span> {
         let Some(mut j) = match_key_ignore_ascii(bytes, i, key) else {
             continue;
         };
-        if j < bytes.len() && (bytes[j] == b'"' || bytes[j] == b'\'') {
-            j += 1;
-        }
+        // U+200B, U+200C of U+FEFF tussen de laatste sleutelletter en het
+        // sluitende aanhalingsteken. `skip_key_operator_gap` slaat dat teken
+        // wel over, maar stopt daarna op `"`/`'`, en dat is geen `=` of `:`.
+        j = skip_invisible_format(bytes, j);
+        j = skip_one_quote(bytes, j);
         j = skip_key_operator_gap(bytes, j);
         if j >= bytes.len() || (bytes[j] != b'=' && bytes[j] != b':') {
             continue;
@@ -246,7 +248,9 @@ fn match_bearer(bytes: &[u8], i: usize) -> Option<Span> {
     }
     const WORD: &str = "authorization";
     let mut j = match_key_ignore_ascii(bytes, i, WORD)?;
-    // JSON-sleutel: "Authorization" : "Bearer …"
+    // JSON-sleutel: "Authorization" : "Bearer …". Zelfde gat als hierboven:
+    // een format-teken vóór het sluitende aanhalingsteken van de sleutel.
+    j = skip_invisible_format(bytes, j);
     j = skip_one_quote(bytes, j);
     j = skip_key_operator_gap(bytes, j);
     if j >= bytes.len() || bytes[j] != b':' {
@@ -661,6 +665,18 @@ fn is_invisible_format(ch: char) -> bool {
     matches!(ch, '\u{200B}' | '\u{200C}' | '\u{FEFF}')
 }
 
+/// Aaneengesloten U+200B, U+200C en U+FEFF. Stopt op het eerste andere teken,
+/// zodat een latere startpositie die staart niet opnieuw tot het einde scant.
+fn skip_invisible_format(bytes: &[u8], mut j: usize) -> usize {
+    while let Some((ch, len)) = decode_char(bytes, j) {
+        if !is_invisible_format(ch) {
+            break;
+        }
+        j += len;
+    }
+    j
+}
+
 fn skip_inline_ws(bytes: &[u8], mut j: usize) -> usize {
     while j < bytes.len() && (bytes[j] == b' ' || bytes[j] == b'\t') {
         j += 1;
@@ -668,10 +684,20 @@ fn skip_inline_ws(bytes: &[u8], mut j: usize) -> usize {
     j
 }
 
-/// Spatie, tab, CR, LF en FF. Alleen ná `=`/`:`, vóór de waarde.
+/// Spatie, tab, CR, LF, FF, en U+200B, U+200C, U+FEFF. Alleen ná `=`/`:`,
+/// vóór de waarde. Een format-teken is geen ASCII-witruimte; zonder deze tak
+/// maskeert `scan_unquoted` alleen dat teken en blijft de gequote waarde staan.
+/// Stopt op het eerste andere teken.
 fn skip_ascii_ws(bytes: &[u8], mut j: usize) -> usize {
-    while j < bytes.len() && bytes[j].is_ascii_whitespace() {
-        j += 1;
+    while j < bytes.len() {
+        if bytes[j].is_ascii_whitespace() {
+            j += 1;
+            continue;
+        }
+        match decode_char(bytes, j) {
+            Some((ch, len)) if is_invisible_format(ch) => j += len,
+            _ => break,
+        }
     }
     j
 }
@@ -1359,5 +1385,80 @@ mod tests {
              kwadratische blow-up in url_username_is_high_risk_token",
             user.len()
         );
+    }
+
+    #[test]
+    fn invisible_format_before_closing_key_quote_does_not_leak() {
+        // symlog-redactfix2rev-0001, bevinding 1. Percent-encoding en `-eyJ`
+        // horen niet bij deze gevallen.
+        for mark in ['\u{200b}', '\u{200c}', '\u{feff}'] {
+            let input = format!("\"password{mark}\":\"hunter2\"");
+            let expected = format!("\"password{mark}\":\"***\"");
+            assert_eq!(redact_secrets(&input), expected, "{input:?}");
+            let shown = for_display(&input, true);
+            assert!(shown.contains("***"), "{input:?} -> {shown:?}");
+            assert!(!shown.contains("hunter2"), "{input:?} -> {shown:?}");
+
+            let spaced = format!("\"password{mark}\": \"hunter2\"");
+            let spaced_expected = format!("\"password{mark}\": \"***\"");
+            assert_eq!(redact_secrets(&spaced), spaced_expected, "{spaced:?}");
+            assert!(
+                !for_display(&spaced, true).contains("hunter2"),
+                "{spaced:?}"
+            );
+
+            let auth = format!("\"Authorization{mark}\": \"Bearer opaque-token-999\"");
+            let auth_expected = format!("\"Authorization{mark}\": \"Bearer ***\"");
+            assert_eq!(redact_secrets(&auth), auth_expected, "{auth:?}");
+            let auth_shown = for_display(&auth, true);
+            assert!(auth_shown.contains("***"), "{auth:?} -> {auth_shown:?}");
+            assert!(
+                !auth_shown.contains("opaque-token-999"),
+                "{auth:?} -> {auth_shown:?}"
+            );
+        }
+
+        // Ná het sluitende aanhalingsteken werkte al; dat moet zo blijven.
+        assert_eq!(
+            redact_secrets("\"password\"\u{200b}:\"hunter2\""),
+            "\"password\"\u{200b}:\"***\""
+        );
+        // Geen overredactie van gewone tekst of een sleutel die alleen lijkt.
+        assert_eq!(
+            redact_secrets("the password is hunter2"),
+            "the password is hunter2"
+        );
+        assert_eq!(
+            redact_secrets("pass\u{200b}port=abc"),
+            "pass\u{200b}port=abc"
+        );
+        assert_eq!(redact_secrets("mysecret=val"), "mysecret=val");
+    }
+
+    #[test]
+    fn invisible_format_after_separator_before_quoted_value_does_not_leak() {
+        // symlog-redactfix2rev-0001, bevinding 2.
+        for mark in ['\u{200b}', '\u{200c}', '\u{feff}'] {
+            let eq = format!("password={mark}\"hunter2\"");
+            let eq_expected = format!("password={mark}\"***\"");
+            assert_eq!(redact_secrets(&eq), eq_expected, "{eq:?}");
+            let shown = for_display(&eq, true);
+            assert!(shown.contains("***"), "{eq:?} -> {shown:?}");
+            assert!(!shown.contains("hunter2"), "{eq:?} -> {shown:?}");
+
+            let colon = format!("\"password\":{mark}\"hunter2\"");
+            let colon_expected = format!("\"password\":{mark}\"***\"");
+            assert_eq!(redact_secrets(&colon), colon_expected, "{colon:?}");
+            assert!(!for_display(&colon, true).contains("hunter2"), "{colon:?}");
+
+            let mixed = format!("secret= {mark}\"plainvalue\"");
+            let mixed_expected = format!("secret= {mark}\"***\"");
+            assert_eq!(redact_secrets(&mixed), mixed_expected, "{mixed:?}");
+            assert!(!redact_secrets(&mixed).contains("plainvalue"), "{mixed:?}");
+        }
+
+        assert_eq!(redact_secrets("hello world"), "hello world");
+        assert_eq!(redact_secrets("just a token bucket"), "just a token bucket");
+        assert_eq!(redact_secrets("token=\n"), "token=\n");
     }
 }
