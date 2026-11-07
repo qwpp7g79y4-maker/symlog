@@ -9,12 +9,8 @@ a log file only (read-only), runs entirely locally, and makes no network request
 > tagged as v0.1.1. This README describes exactly what the current binary does; see
 > [Open items](#open-items) for what is deliberately still missing.
 
-## Nederlands
-
-Korte samenvatting: `symlog` is een lokale, read-only terminal-logviewer voor
-Symfony/Monolog-logs. De rest van deze README is Engels. Een paar regels die de
-binary zelf print blijven Nederlands: `wacht op <pad>...`, `— geroteerd —` en
-`— afgekapt —`.
+Nederlandse versie: [README.nl.md](README.nl.md). The help text and a few lines the binary
+prints are Dutch (`wacht op <pad>...`, `— geroteerd —`, `— afgekapt —`).
 
 ## What it does
 
@@ -50,7 +46,7 @@ binary zelf print blijven Nederlands: `wacht op <pad>...`, `— geroteerd —` e
   That variant is not in the source; to repeat the check, open the file in
   `Reader::open` that way temporarily.
 
-## Install
+## Installation
 
 ```sh
 cargo install symlog
@@ -62,13 +58,13 @@ Or from a local checkout: `cargo install --path .`
 ## Usage
 
 ```
-symlog <PATH> [-f|--follow] [--level LEVEL] [--channel CHANNEL]... [--plain] [--no-color] [--no-redact] [--tui]
+symlog <PATH> [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui]
 ```
 
 `<PATH>` is required; there is no automatic `var/log/...` default and no stdin
 support (`-`) in this version.
 
-### Example
+## Example
 
 Real output on `tests/fixtures/line-basic.log` (plain mode, for example via a pipe
 or `--plain`):
@@ -101,6 +97,10 @@ The same fixture in the interactive TUI (80×24, no filter):
 j/k gg/G Ctrl-d/u / n/N c l F o y ? q
 ```
 
+`examples/` holds two realistic inputs (`symfony-prod.log`, `api-json.ndjson`) with the
+expected `--plain --no-color` output next to them (`*.expected`); `tests/examples_golden.rs`
+compares them.
+
 ## Keys (TUI)
 
 | Key | Does |
@@ -123,7 +123,7 @@ j/k gg/G Ctrl-d/u / n/N c l F o y ? q
 There is no horizontal scrolling. In normal mode `h` does nothing; `l` opens the
 level picker. Text wider than the window is truncated.
 
-## Flags
+## Options
 
 Exact list from `symlog --help` (see `tests/golden/help.txt`):
 
@@ -132,7 +132,7 @@ Exact list from `symlog --help` (see `tests/golden/help.txt`):
 | `<PATH>` | path to the log file (required) |
 | `-f`, `--follow` | without a tty: if the path is missing, `wacht op <pad>...` is printed on stderr and the process keeps waiting (not exit 1). When the file appears, records go to stdout and the process keeps running. An empty file produces no output and does not stop; a line that arrives later still appears |
 | `--level <LEVEL>` | level filter: a list (`error,critical`) or a lower bound (`>=warning`) |
-| `--channel <CHANNEL>` | channel filter, repeatable; `!channel` excludes that channel |
+| `--channel <CHANNELS>` | channel filter, repeatable; `!channel` excludes that channel |
 | `--plain` | force plain output, even on a tty |
 | `--no-color` | no color, even on a tty |
 | `--no-redact` | show secrets unmasked; by default they become `***` |
@@ -242,7 +242,8 @@ behavior that is actually wired up.
 
 ## Development
 
-The suite (`cargo test --no-fail-fast`) has 423 passing tests, 0 failing and 1 ignored.
+The suite (`cargo test --no-fail-fast`) has 427 passing tests, 0 failing and 1 ignored,
+measured on commit `2c4e4c2`.
 See `QUALITY.md` for the quality gates.
 
 ```sh

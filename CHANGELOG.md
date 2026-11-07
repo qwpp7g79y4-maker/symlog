@@ -6,9 +6,18 @@ geen SemVer-garanties zolang het niet gepubliceerd is.
 
 ## Onuitgebracht
 
+### Gewijzigd
+
+- Foutmeldingen (ongeldige `--level`, map als pad, geen leesrechten, leesfout,
+  terminalfout) noemen nu wat er misging en wat de gebruiker kan doen; exitcodes
+  ongewijzigd.
+
 ### Toegevoegd
 
-- `QUALITY.md` met de kwaliteitspoorten en het huidige testaantal (423 geslaagd,
+- `examples/` met twee invoerbestanden en de verwachte uitvoer, plus
+  `tests/examples_golden.rs`; `README.nl.md` (Nederlands) met Installatie, Voorbeeld en
+  Opties.
+- `QUALITY.md` met de kwaliteitspoorten en het huidige testaantal (427 geslaagd,
   0 gefaald, 1 genegeerd); `README.md` noemt hetzelfde aantal.
 
 ## 0.1.1 — 2026-10-25
