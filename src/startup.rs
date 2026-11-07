@@ -127,15 +127,24 @@ pub fn outcome_for(path: &Path, classification: Classification) -> Outcome {
             code: EXIT_MISSING,
         },
         Classification::Directory => Outcome::Exit {
-            message: format!("{p} is een map, geen bestand", p = path.display()),
+            message: format!(
+                "{p} is een map, geen bestand; geef het pad van een logbestand op, bijvoorbeeld {p}/dev.log",
+                p = path.display()
+            ),
             code: EXIT_USAGE,
         },
         Classification::PermissionDenied => Outcome::Exit {
-            message: format!("{p}: geen leesrechten", p = path.display()),
+            message: format!(
+                "{p}: geen leesrechten; controleer de rechten (chmod/chown) of draai als een gebruiker die het bestand mag lezen",
+                p = path.display()
+            ),
             code: EXIT_IO_ERROR,
         },
         Classification::Io(err) => Outcome::Exit {
-            message: format!("{p}: {err}", p = path.display()),
+            message: format!(
+                "{p}: lezen mislukt ({err}); controleer of het bestand en de schijf bereikbaar zijn en probeer het opnieuw",
+                p = path.display()
+            ),
             code: EXIT_IO_ERROR,
         },
         Classification::Empty => Outcome::Empty,
@@ -253,7 +262,7 @@ mod tests {
         assert_eq!(
             outcome,
             Outcome::Exit {
-                message: "/tmp/een-map is een map, geen bestand".to_string(),
+                message: "/tmp/een-map is een map, geen bestand; geef het pad van een logbestand op, bijvoorbeeld /tmp/een-map/dev.log".to_string(),
                 code: EXIT_USAGE,
             }
         );
@@ -266,7 +275,7 @@ mod tests {
         assert_eq!(
             outcome,
             Outcome::Exit {
-                message: "/tmp/geheim.log: geen leesrechten".to_string(),
+                message: "/tmp/geheim.log: geen leesrechten; controleer de rechten (chmod/chown) of draai als een gebruiker die het bestand mag lezen".to_string(),
                 code: EXIT_IO_ERROR,
             }
         );

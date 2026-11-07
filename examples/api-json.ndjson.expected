@@ -1,0 +1,8 @@
+[2026-03-02T09:00:00.123456+01:00] request.INFO: Request started
+[2026-03-02T09:00:00.980000+01:00] doctrine.NOTICE: Slow query detected
+[2026-03-02T09:00:01.500000+01:00] app.ERROR: Upstream call failed: https://svc:***@api.example.test/v2/stock
+[2026-03-02T09:00:02.000000+01:00] request.CRITICAL: Unhandled exception
+    #0 /var/www/src/Stock.php:12: 
+    #1 /var/www/src/Stock.php:12: App\Stock->adjust(-3)
+    #2 /var/www/src/Controller/ItemController.php:44: App\Controller\ItemController->update()
+    #3 {main}

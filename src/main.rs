@@ -105,7 +105,10 @@ fn build_filter(level: Option<&str>, channels: &[String]) -> Result<FilterSpec, 
         None => None,
         Some(spec) => match LevelFilter::parse(spec) {
             Some(parsed) => Some(parsed),
-            None => return Err(format!("ongeldig --level: {spec:?}")),
+            None => return Err(format!(
+                "ongeldig --level: {spec:?}; gebruik een lijst van niveaus (`error,critical`) of een ondergrens (`>=warning`); \
+                 geldige niveaus: debug, info, notice, warning, error, critical, alert, emergency"
+            )),
         },
     };
     Ok(FilterSpec {
@@ -184,7 +187,11 @@ fn run_plain_mode(
     printer.set_redact(redact);
 
     if let Err(err) = follower.tick() {
-        let _ = writeln!(err_out, "{}: {err}", path.display());
+        let _ = writeln!(
+            err_out,
+            "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+            path.display()
+        );
         return startup::EXIT_IO_ERROR;
     }
     if !follow {
@@ -196,7 +203,11 @@ fn run_plain_mode(
         follower.finish();
     }
     if let Err(err) = printer.flush(&follower, filter, colors_enabled, out) {
-        let _ = writeln!(err_out, "{}: {err}", path.display());
+        let _ = writeln!(
+            err_out,
+            "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+            path.display()
+        );
         if !follow {
             return startup::EXIT_IO_ERROR;
         }
@@ -213,11 +224,19 @@ fn run_plain_mode(
             // Herstelbaar (task.md T10 "Blijft"): de volgende tick detecteert een
             // eventuele afkapping of rotatie gewoon opnieuw via `stat`, dus dit stopt
             // het volgen niet.
-            let _ = writeln!(err_out, "{}: {err}", path.display());
+            let _ = writeln!(
+                err_out,
+                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+                path.display()
+            );
             continue;
         }
         if let Err(err) = printer.flush(&follower, filter, colors_enabled, out) {
-            let _ = writeln!(err_out, "{}: {err}", path.display());
+            let _ = writeln!(
+                err_out,
+                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+                path.display()
+            );
         }
     }
 }
@@ -234,12 +253,18 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) ->
     let mut reader = match Reader::open(path) {
         Ok(reader) => reader,
         Err(err) => {
-            eprintln!("{}: {err}", path.display());
+            eprintln!(
+                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+                path.display()
+            );
             return startup::EXIT_IO_ERROR;
         }
     };
     if let Err(err) = reader.wait_until_indexed() {
-        eprintln!("{}: {err}", path.display());
+        eprintln!(
+            "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+            path.display()
+        );
         return startup::EXIT_IO_ERROR;
     }
 
@@ -249,7 +274,7 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) ->
             Ok(Some(bytes)) => records.push(symlog::parse::parse_record_lossy(&bytes)),
             Ok(None) => break,
             Err(err) => {
-                eprintln!("{}: {err}", path.display());
+                eprintln!("{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is", path.display());
                 return startup::EXIT_IO_ERROR;
             }
         }
@@ -259,7 +284,9 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) ->
         return match run_in_terminal(run_empty_message_loop) {
             Ok(()) => 0,
             Err(err) => {
-                eprintln!("{err}");
+                eprintln!(
+                    "terminalfout: {err}; start symlog in een echte terminal of gebruik --plain"
+                );
                 startup::EXIT_IO_ERROR
             }
         };
@@ -280,7 +307,7 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) ->
             0
         }
         Err(err) => {
-            eprintln!("{err}");
+            eprintln!("terminalfout: {err}; start symlog in een echte terminal of gebruik --plain");
             startup::EXIT_IO_ERROR
         }
     }

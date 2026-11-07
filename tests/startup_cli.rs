@@ -167,3 +167,18 @@ fn missing_file_with_follow_waits_then_keeps_following() {
     child.kill().expect("kill");
     child.wait().expect("wait na kill");
 }
+
+/// Een ongeldige `--level` noemt de geldige vormen en niveaus, exit 2.
+#[test]
+fn invalid_level_message_says_what_to_do() {
+    Command::cargo_bin("symlog")
+        .expect("binary vinden")
+        .args(["x.log", "--level", "bogus"])
+        .assert()
+        .code(2)
+        .stderr(
+            predicate::str::contains("ongeldig --level")
+                .and(predicate::str::contains(">=warning"))
+                .and(predicate::str::contains("emergency")),
+        );
+}
