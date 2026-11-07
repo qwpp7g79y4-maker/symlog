@@ -4,6 +4,13 @@ Alle noemenswaardige wijzigingen in dit project staan in dit bestand. Het formaa
 gebaseerd op [Keep a Changelog](https://keepachangelog.com/); dit project gebruikt nog
 geen SemVer-garanties zolang het niet gepubliceerd is.
 
+## Onuitgebracht
+
+### Toegevoegd
+
+- `QUALITY.md` met de kwaliteitspoorten en het huidige testaantal (423 geslaagd,
+  0 gefaald, 1 genegeerd); `README.md` noemt hetzelfde aantal.
+
 ## 0.1.1 — 2026-10-25
 
 ### Opgelost

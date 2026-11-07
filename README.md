@@ -242,6 +242,9 @@ behavior that is actually wired up.
 
 ## Development
 
+The suite (`cargo test --no-fail-fast`) has 423 passing tests, 0 failing and 1 ignored.
+See `QUALITY.md` for the quality gates.
+
 ```sh
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
