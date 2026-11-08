@@ -26,7 +26,7 @@
 //! `Raw`-terugval zelf komt in T6.
 //!
 //! JSON-records zijn altijd één fysieke regel (task.md T5 "Blijft": pretty-printed,
-//! meerregelige JSON wordt in v1 niet samengevoegd). [`is_record_header`] parset
+//! meerregelige JSON wordt in v1 niet samengevoegd). `is_record_header` parset
 //! daarom een regel in zijn geheel; een pretty-printed record waarvan alleen de
 //! openende `{` op de eerste regel staat, heeft geen `"datetime"`-veld op die regel
 //! en wordt dus nooit als recordstart herkend (zie `tests/json_golden.rs`).

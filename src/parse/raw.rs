@@ -39,6 +39,7 @@ pub enum RawReason {
 }
 
 impl RawReason {
+    /// `unknown_format` of `invalid_json`.
     pub fn as_str(&self) -> &'static str {
         match self {
             RawReason::UnknownFormat => "unknown_format",
@@ -52,7 +53,9 @@ impl RawReason {
 /// de bytes op schijf zelf blijven altijd ongewijzigd (task.md T6 "Blijft").
 #[derive(Debug, Clone, PartialEq)]
 pub struct RawRecord {
+    /// Lossy UTF-8 van de originele bytes. Ongeldige bytes worden U+FFFD.
     pub text: String,
+    /// Waarom het blok geen LineFormatter- of JsonFormatter-record werd.
     pub reason: RawReason,
 }
 
@@ -67,6 +70,7 @@ impl RawRecord {
         Self { text, reason }
     }
 
+    /// JSON met `raw` en `reason`, voor golden-tests.
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "raw": self.text,
@@ -93,7 +97,9 @@ impl RawRecord {
 /// terug (task.md T6 "Doet").
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParsedRecord {
+    /// Herkend LineFormatter- of JsonFormatter-record.
     Record(Record),
+    /// Blok dat geen van beide formaten haalde.
     Raw(RawRecord),
 }
 
@@ -105,6 +111,7 @@ impl ParsedRecord {
         }
     }
 
+    /// `Some` als dit de Raw-terugval is.
     pub fn as_raw(&self) -> Option<&RawRecord> {
         match self {
             ParsedRecord::Raw(raw) => Some(raw),
@@ -112,6 +119,7 @@ impl ParsedRecord {
         }
     }
 
+    /// JSON van het herkende record of van de Raw-terugval.
     pub fn to_json(&self) -> serde_json::Value {
         match self {
             ParsedRecord::Record(record) => record.to_json(),

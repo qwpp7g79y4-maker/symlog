@@ -27,13 +27,21 @@
 /// deze volgorde niet zonder ook de filtersemantiek te controleren.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
+    /// `DEBUG`. Minst ernstig. Monolog-integer 100.
     Debug,
+    /// `INFO`. Monolog-integer 200.
     Info,
+    /// `NOTICE`. Monolog-integer 250.
     Notice,
+    /// `WARNING`. Monolog-integer 300.
     Warning,
+    /// `ERROR`. Monolog-integer 400.
     Error,
+    /// `CRITICAL`. Monolog-integer 500.
     Critical,
+    /// `ALERT`. Monolog-integer 550.
     Alert,
+    /// `EMERGENCY`. Meest ernstig. Monolog-integer 600.
     Emergency,
 }
 
@@ -123,7 +131,7 @@ impl Ts {
     /// [`Ts`]. `None` als de tekst geen van de drie bekende varianten is (Monolog 2/3
     /// met/zonder microseconden, of Monolog 1 zonder offset). Een LineFormatter-record
     /// heeft dit al laten slagen via
-    /// [`crate::parse::line::looks_like_datetime`] vóórdat dit aangeroepen wordt; een
+    /// `looks_like_datetime` vóórdat dit aangeroepen wordt; een
     /// JsonFormatter-record ([`crate::parse::json`]) valideert het `datetime`-veld
     /// niet op formaat, dus daar kan dit wél `None` opleveren bij een vreemde waarde —
     /// de ruwe tekst in [`Record::datetime`] blijft in dat geval gewoon zichtbaar.
@@ -293,13 +301,17 @@ pub struct Record {
     /// (zie [`Ts::parse`]); `datetime` zelf blijft dan gewoon de ruwe tekst, ongewijzigd
     /// zichtbaar.
     pub ts: Option<Ts>,
+    /// Monolog-kanaal, bijvoorbeeld `app` of `request`.
     pub channel: String,
+    /// Monolog-niveau.
     pub level: Level,
     /// Het volledige bericht, inclusief eventuele stacktrace-tekst op de regels erna
     /// (task.md T4): een record kan meerdere fysieke regels beslaan, dus `message` kan
     /// zelf `\n`-tekens bevatten.
     pub message: String,
+    /// `%context%` als JSON. Een lege context is `[]`.
     pub context: serde_json::Value,
+    /// `%extra%` als JSON. Een lege extra is `[]`.
     pub extra: serde_json::Value,
     /// Stacktrace-frames herkend in `message` (LineFormatter) of meegegeven door de
     /// JsonFormatter-kant (task.md T4). Leeg als er geen stacktrace is.
@@ -330,12 +342,16 @@ impl Record {
 /// "springbaar").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Frame {
+    /// Bestandspad, of `None` als het frame niet springbaar is.
     pub path: Option<String>,
+    /// Regelnummer, of `None` als het frame niet springbaar is.
     pub line: Option<u32>,
+    /// Functietekst uit het frame.
     pub func: String,
 }
 
 impl Frame {
+    /// JSON met `path`, `line` en `func`, voor golden-tests.
     pub fn to_json(&self) -> serde_json::Value {
         serde_json::json!({
             "path": self.path,

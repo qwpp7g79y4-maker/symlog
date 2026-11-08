@@ -43,21 +43,33 @@ pub enum JumpOutcome {
     /// Het gemapte (of ongemapte) bestand bestaat lokaal niet: geen editor gestart
     /// (task.md T9 "Doet": "bestaat het gemapte bestand niet, dan een melding in de
     /// statusbalk en geen start van de editor").
-    NotFound { message: String },
+    NotFound {
+        /// Melding voor de statusbalk. Er is geen editor gestart.
+        message: String,
+    },
     /// De editor kon niet (goed) starten; symlog blijft gewoon draaien
     /// (blueprint.md "Foutafhandeling").
-    Failed { message: String },
+    Failed {
+        /// Melding voor de statusbalk. symlog blijft draaien.
+        message: String,
+    },
 }
 
 /// De vier takken van task.md T9 "Doet"'s beslisboom.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Decision {
     /// Stap 1: een draaiende nvim-server (`--server`, config, of `$NVIM`).
-    Server { socket: String },
+    Server {
+        /// Socketpad van de draaiende nvim-server.
+        socket: String,
+    },
     /// Stap 2: geen server, maar `nvim` staat op PATH.
     SpawnNvim,
     /// Stap 3: geen server, geen `nvim` op PATH, maar `$VISUAL` of `$EDITOR` is gezet.
-    Fallback { spec: String },
+    Fallback {
+        /// Ruwe `$VISUAL`- of `$EDITOR`-waarde.
+        spec: String,
+    },
     /// Stap 3, laatste terugval: niets van het bovenstaande.
     Vi,
 }
@@ -133,6 +145,7 @@ fn is_executable_file(_path: &Path) -> bool {
 /// `std::process::Command` zodat [`execute`]/[`jump`] zonder een echte `nvim`/editor
 /// getest kunnen worden.
 pub trait CommandRunner {
+    /// Start `program` met losse `args` en wacht tot het stopt.
     fn run(&mut self, program: &str, args: &[String]) -> io::Result<ExitStatus>;
 }
 
@@ -269,11 +282,17 @@ pub fn execute<R: CommandRunner>(
 /// `std::env::var`/config/vlaggen; deze struct raakt zelf geen omgeving aan, zodat
 /// `tests/editor_argv.rs` elk scenario met expliciete waarden kan opzetten.
 pub struct JumpContext<'a> {
+    /// `--server`.
     pub server_flag: Option<&'a str>,
+    /// `server` uit de config.
     pub server_config: Option<&'a str>,
+    /// `$NVIM`.
     pub nvim_env: Option<&'a str>,
+    /// `$VISUAL`.
     pub visual: Option<&'a str>,
+    /// `$EDITOR`.
     pub editor: Option<&'a str>,
+    /// `$PATH`, gescheiden door `:`.
     pub path_var: &'a str,
 }
 

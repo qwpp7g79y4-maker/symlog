@@ -1,7 +1,7 @@
 //! Opstartcontroles: leeg en ontbrekend bestand (task.md T11; blueprint.md
 //! "Foutafhandeling", exitcodes uit de CLI-schets).
 //!
-//! Net als [`crate::editor`]'s scheiding tussen een pure beslisboom ([`editor::decide`])
+//! Net als [`crate::editor`]'s scheiding tussen een pure beslisboom ([`crate::editor::decide`])
 //! en de daadwerkelijke uitvoering is deze module puur: [`classify`] en [`outcome_for`]
 //! raken geen stderr/stdout aan en roepen nooit `process::exit`, zodat ze zonder een
 //! echt subproces getest kunnen worden. Alleen [`wait_until_present`] blokkeert
@@ -50,7 +50,10 @@ pub enum Classification {
     /// Bestaat, is leesbaar, heeft inhoud, en blijft binnen [`MAX_INPUT_BYTES`].
     NonEmpty,
     /// Gewoon bestand groter dan [`MAX_INPUT_BYTES`]. De inhoud is niet gelezen.
-    TooLarge { len: u64 },
+    TooLarge {
+        /// Bestandsgrootte in bytes. De inhoud is niet gelezen.
+        len: u64,
+    },
     /// Een onverwachte, niet-herstelbare I/O-fout (bijvoorbeeld een symlink-lus).
     Io(io::Error),
 }
@@ -135,7 +138,12 @@ pub fn wait_until_present_or_stop(
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
     /// Meteen afsluiten: `message` naar stderr, exitcode `code`.
-    Exit { message: String, code: i32 },
+    Exit {
+        /// Tekst voor stderr.
+        message: String,
+        /// Proces-exitcode.
+        code: i32,
+    },
     /// Leeg bestand: TUI toont "log is leeg", plain niets (task.md T11 "Doet").
     /// Exitcode 0, geen boodschap.
     Empty,

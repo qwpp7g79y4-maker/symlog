@@ -1,11 +1,11 @@
 //! Parsers voor Monolog-logregels (task.md T3/T4/T5; blueprint.md `parse/`).
 //!
-//! T3 voegde [`line`] toe (LineFormatter, Monolog 1–3). T4 voegt [`trace`] toe
-//! (frames uit stacktrace-tekst en JSON-exceptiedata) en breidt [`line`] uit met
+//! T3 voegde [`mod@line`] toe (LineFormatter, Monolog 1–3). T4 voegt [`trace`] toe
+//! (frames uit stacktrace-tekst en JSON-exceptiedata) en breidt [`mod@line`] uit met
 //! multiline-recordondersteuning. T5 voegt [`json`] toe (JsonFormatter/NDJSON) en de
 //! dispatch tussen formaten uit blueprint.md (`detect`/[`parse_record`]): het formaat
 //! wordt per record bepaald, niet per bestand (task.md T5 "Doet"), zodat een gemengd
-//! bestand (lijn- en JSON-records door elkaar) werkt. [`is_record_header`] combineert
+//! bestand (lijn- en JSON-records door elkaar) werkt. `is_record_header` combineert
 //! de twee formaat-specifieke kopcontroles tot één die de achtergrondindexer
 //! ([`crate::reader::index`]) gebruikt, zodat recordgrenzen ook in een gemengd
 //! bestand correct liggen.
@@ -74,7 +74,7 @@ pub fn parse_record_as(block: &str, format: Format) -> Option<Record> {
 /// voor ongeldige byte-sequenties) en die tekst dan net als [`parse_record`] geparst;
 /// lukt dat niet, dan is het resultaat de Raw-terugval uit [`raw`] in plaats van een
 /// weggevallen record. Dit is de eerste functie in deze module die rauwe bytes
-/// aanvaardt in plaats van al-gevalideerde tekst (vergelijk [`is_record_header`], die
+/// aanvaardt in plaats van al-gevalideerde tekst (vergelijk `is_record_header`, die
 /// ook al op bytes werkt): juist ongeldige UTF-8-invoer (task.md T6, F8) moet hier
 /// zonder paniek doorheen kunnen.
 pub fn parse_record_lossy(bytes: &[u8]) -> ParsedRecord {
@@ -97,7 +97,7 @@ pub(crate) fn is_record_header(line: &[u8]) -> bool {
 
 /// Splitst de volledige inhoud van een (mogelijk gemengd) logbestand in
 /// recordblokken, net als [`line::split_records`] maar met de format-agnostische
-/// [`is_record_header`] in plaats van de LineFormatter-only kopcontrole. Gebruikt
+/// `is_record_header` in plaats van de LineFormatter-only kopcontrole. Gebruikt
 /// door de T5-golden-tests voor F6 (lijn- en JSON-records door elkaar); de echte
 /// reader ([`crate::reader::index`]) doet hetzelfde maar dan streaming op bytes.
 pub fn split_records(content: &str) -> Vec<&str> {

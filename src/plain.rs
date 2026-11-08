@@ -146,6 +146,7 @@ impl Default for PlainPrinter {
 }
 
 impl PlainPrinter {
+    /// Lege printer. Maskeren staat aan. Nog niets is afgedrukt.
     pub fn new() -> PlainPrinter {
         PlainPrinter::default()
     }
@@ -211,7 +212,7 @@ pub const STREAM_MAX_RECORD_BYTES: usize = 16 * 1024 * 1024;
 /// record zodra het compleet is, zonder het geheel in het geheugen te houden. Er staat
 /// op elk moment hooguit één regel en één record in het geheugen (elk begrensd door
 /// [`STREAM_MAX_RECORD_BYTES`]). Recordgrenzen en weergave zijn dezelfde als in de
-/// bestandsroute (`is_record_header`, [`parse_record_lossy`], [`render_line_with`]);
+/// bestandsroute (`is_record_header`, [`crate::parse::parse_record_lossy`], `render_line_with`);
 /// een staartregel zonder afsluitende `\n` wordt aan het einde alsnog afgedrukt.
 ///
 /// Geeft het aantal gelezen records terug (ook die het filter wegliet).

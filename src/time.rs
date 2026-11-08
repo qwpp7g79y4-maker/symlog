@@ -14,7 +14,7 @@
 
 use crate::model::Ts;
 
-/// Welke tijdzone een [`Ts::Offset`](crate::model::Ts::Offset) voor weergave omrekent
+/// Welke tijdzone een [`Ts::Offset`] voor weergave omrekent
 /// (CLI-schets in task.md: `--tz log|local|<IANA>`).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TzMode {
@@ -41,7 +41,7 @@ impl TzMode {
 
 /// Formatteert `ts` volgens `mode` als `Y-m-dTH:i:s[.ffffff]±HH:MM` (met zichtbare
 /// offset, task.md T7 "Doet"), of als een "zonder zone"-tekst voor
-/// [`Ts::NoZone`](crate::model::Ts::NoZone). `Err` alleen voor [`TzMode::Named`] met
+/// [`Ts::NoZone`]. `Err` alleen voor [`TzMode::Named`] met
 /// een tijdzonenaam die de IANA-tijdzonedatabase niet kent.
 pub fn display(ts: &Ts, mode: &TzMode) -> Result<String, jiff::Error> {
     match ts {

@@ -253,7 +253,9 @@ impl Generation {
 /// T10 "Doet": "scheidingsregel '— geroteerd —'" / "'— afgekapt —'").
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SeparatorKind {
+    /// Scheidingsregel `— geroteerd —`.
     Rotated,
+    /// Scheidingsregel `— afgekapt —`.
     Truncated,
 }
 
@@ -265,6 +267,7 @@ pub struct Separator {
     /// De scheidingsregel hoort direct vóór het record op deze globale index (of aan
     /// het eind van de lijst als dit gelijk is aan het huidige totaal).
     pub before_record: usize,
+    /// Rotatie of afkappen.
     pub kind: SeparatorKind,
 }
 
@@ -290,7 +293,7 @@ pub enum FollowEvent {
 }
 
 /// Hoe de onvolledige laatste regel van het gevolgde bestand getoond moet worden
-/// (task.md T10 "Doet"). Nooit gecached in [`Generation`]: dit zijn rechtstreeks de
+/// (task.md T10 "Doet"). Nooit gecached in `Generation`: dit zijn rechtstreeks de
 /// bytes die [`IndexScanner::pending_tail`] op dit moment vasthoudt.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TailState {
@@ -499,9 +502,10 @@ impl Follower {
     }
 
     /// Sluit de actieve generatie af alsof ze nooit meer kan groeien (zoals
-    /// [`Generation::finish`] dat al bij rotatie voor de oude generatie deed, task.md
+    /// `Generation::finish` dat al bij rotatie voor de oude generatie deed, task.md
     /// T10 stap 2): een onvolledige laatste regel wordt zo alsnog een gewoon,
-    /// zichtbaar record (via [`IndexScanner::finish`]), precies zoals [`build_index`]
+    /// zichtbaar record (via [`IndexScanner::finish`]), precies zoals
+    /// [`crate::reader::index::build_index`]
     /// dat voor de TUI-weg bij echte EOF al deed. Bedoeld voor een eenmalige run
     /// zonder `--follow` (breaktest-symlog-0004 bevinding 1): daar komt nooit meer
     /// bij, dus er is geen risico dat een later aangevulde regel dubbel verschijnt.

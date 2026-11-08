@@ -3,7 +3,7 @@
 //! Standaardformaat: `[%datetime%] %channel%.%level_name%: %message% %context%
 //! %extra%`. `context` en `extra` zijn JSON (`{...}` of `[]`) aan het eind van het
 //! record; de grens met `message` wordt van achteren gevonden via een gebalanceerde
-//! JSON-scan ([`rfind_json_blob`]), zodat een `{` of `]` in de message zelf de
+//! JSON-scan (`rfind_json_blob`), zodat een `{` of `]` in de message zelf de
 //! grensbepaling niet verstoort: de scan stopt zodra de buitenste haak van het
 //! *laatste* blok sluit en gaat niet verder naar links.
 //!
@@ -12,7 +12,7 @@
 //! `\n` bevat (bijvoorbeeld PHP's eigen `Stack trace:`-tekst bij een ongevangen
 //! exception) komt ongewijzigd in de log terecht. [`parse_line`] accepteert daarom een
 //! heel recordblok (header-regel plus eventuele vervolgregels); de grensbepaling van
-//! `%context%`/`%extra%` werkt ongewijzigd, want [`rfind_json_blob`] scant simpelweg
+//! `%context%`/`%extra%` werkt ongewijzigd, want `rfind_json_blob` scant simpelweg
 //! vanaf het einde van de tekst en behandelt `\n` als een gewoon teken. [`split_records`]
 //! splitst de inhoud van een heel bestand in zulke blokken; de echte reader
 //! ([`crate::reader::index`]) doet hetzelfde maar dan streaming op bytes.

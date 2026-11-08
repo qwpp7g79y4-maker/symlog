@@ -4,7 +4,7 @@
 //! Een record begint bij offset 0 en bij elke regel die een geldige recordkop is:
 //! `[` + herkende datetime voor LineFormatter (task.md T4), of `{` met een
 //! `"datetime"`-veld voor JsonFormatter (task.md T5) — zie
-//! [`crate::parse::is_record_header`], die beide koppen combineert zodat een gemengd
+//! `is_record_header`, die beide koppen combineert zodat een gemengd
 //! bestand (T5, F6) ook via de streaming-indexer correct in records valt. Andere
 //! regels zijn een vervolg van het lopende record (bijvoorbeeld een stacktrace-regel):
 //! ze leveren geen nieuwe offset op. Dit maakt een record inherent meerdere fysieke
@@ -33,6 +33,7 @@ pub struct RecordIndex {
 }
 
 impl RecordIndex {
+    /// Lege index. Nog geen offsets, en het scannen is nog niet klaar.
     pub fn new() -> Self {
         Self::default()
     }
@@ -42,6 +43,7 @@ impl RecordIndex {
         self.offsets.read().expect("index-lock vergiftigd").len()
     }
 
+    /// Of er nog geen record-start is gevonden.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -111,7 +113,7 @@ impl RecordIndex {
 /// Een regel kan zelf over een bloklezing/`feed`-aanroep heen lopen (bijvoorbeeld een
 /// lange stacktrace-regel, of de datetime-kop precies op de blokgrens); `carry` houdt
 /// de bytes van de huidige, nog niet afgesloten regel vast totdat de afsluitende `\n`
-/// (of EOF, via [`IndexScanner::finish`]) gevonden is, zodat [`is_record_header`]
+/// (of EOF, via [`IndexScanner::finish`]) gevonden is, zodat `is_record_header`
 /// altijd de volledige regel ziet en niet een toevallig stukje ervan.
 #[derive(Debug, Default)]
 pub struct IndexScanner {

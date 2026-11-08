@@ -122,8 +122,11 @@ impl LevelFilter {
 /// door: geen kanaal-, niveau- of zoekfilter ingesteld.
 #[derive(Debug, Clone, Default)]
 pub struct FilterSpec {
+    /// Kanaalfilter. Standaard leeg, dan komt elk kanaal door.
     pub channels: ChannelFilter,
+    /// Niveaufilter. `None` laat elk niveau door.
     pub levels: Option<LevelFilter>,
+    /// Regex over bericht en context. `None` zoekt niet.
     pub search: Option<Regex>,
 }
 
