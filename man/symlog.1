@@ -45,6 +45,12 @@ Schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bes
 wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt.
 Niet samen met \fB--tui\fR of \fB--completions\fR.
 .TP
+.B --quiet
+Verberg de hintregel. Geen contextregel. Een pipe laat beide al weg.
+.TP
+.B --verbose
+Toon de hintregel, en bij succes één contextregel op stderr. Niet samen met \fB--quiet\fR.
+.TP
 .B --completions \fISHELL\fR
 Print een shell-completionscript (bash of zsh) en stop. Mogelijke waarden: bash, zsh.
 Geen pad nodig.
@@ -63,7 +69,8 @@ Normaal afgesloten. Ook \fB--help\fR, \fB--version\fR en \fB-V\fR.
 Het pad bestaat niet en \fB--follow\fR staat uit.
 .TP
 .B 2
-Gebruiksfout: ontbrekend verplicht argument, ongeldige \fB--level\fR of het pad is een map.
+Gebruiksfout: ontbrekend verplicht argument, ongeldige \fB--level\fR, het pad is een map,
+of \fB--quiet\fR samen met \fB--verbose\fR.
 .TP
 .B 3
 \fB--tui\fR gevraagd zonder tty op stdout.

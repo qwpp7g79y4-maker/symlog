@@ -10,6 +10,7 @@ Werk op tak `prep/w24-fout`, na het 1.0.0-voorstel. Nog niet gepubliceerd.
 
 ### Toegevoegd
 
+- `--quiet` en `--verbose`. Een pipe of een redirect laat de `hint:`-regel weg. `--verbose` toont die regel, en bij een geschreven uitvoer één `context:`-regel op stderr (`records`). `--quiet` laat de hint ook op een terminal weg. De plain-uitvoer op stdout blijft gelijk. Exitcodes blijven 0, 1, 2, 3 en 4. `--quiet` samen met `--verbose` is exit 2. Een ontbrekende bovenliggende map voor `--output` blijft exit 4.
 - `--output PATH` schrijft de plain-uitvoer naar dat bestand in plaats van stdout. Een bestaand bestand wordt vervangen. Een ontbrekende bovenliggende map is exit 4, dezelfde code als een andere mislukte schrijfactie, en wordt niet aangemaakt. De exitcode van een geslaagde run blijft 0.
 - `--completions <bash|zsh>` print een shell-completionscript, gegenereerd met `clap_complete`; `<PATH>` is dan niet nodig. `man/symlog.1` is de man-pagina bij `--help`; `tests/man_help.rs` houdt ze gelijk.
 - `symlog -` leest stdin in één doorgang en schrijft elk record plain uit zodra het

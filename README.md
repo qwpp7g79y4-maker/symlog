@@ -75,7 +75,7 @@ level range or a channel. The last one reads a JsonFormatter (NDJSON) file the s
 ## Usage
 
 ```
-symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui] [--output PATH]
+symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui] [--output PATH] [--quiet | --verbose]
 symlog --completions <bash|zsh>
 ```
 
@@ -156,6 +156,8 @@ Exact list from `symlog --help` (see `tests/golden/help.txt`):
 | `--no-redact` | show secrets unmasked; by default they become `***` |
 | `--tui` | force the TUI; without a tty on stdout this exits 3 |
 | `--output <PATH>` | write the plain output to this file instead of stdout. An existing file is replaced. A missing parent directory is an error and is not created. Not together with `--tui` or `--completions` |
+| `--quiet` | hide the hint line, even on a terminal. No context line. A pipe already omits both |
+| `--verbose` | print the hint line, and when output was written one `context:` line on stderr, even on a pipe. Not with `--quiet` |
 | `--completions <SHELL>` | print a shell completion script (`bash` or `zsh`) and exit 0; `<PATH>` is then not needed |
 | `-h`, `--help` | help |
 | `-V`, `--version` | version |
@@ -187,13 +189,13 @@ replaces these values with `***`:
 
 ## Exit codes
 
-0 is success, 1 is a missing path (the only finding symlog reports; it has no threshold), 2 is invalid input. Codes 3 and 4 are extra and unchanged. `--version` and `-V` exit 0.
+0 is success, 1 is a missing path (the only finding symlog reports; it has no threshold), 2 is invalid input. Codes 3 and 4 are extra and unchanged. `--version` and `-V` exit 0. On a terminal, an error also prints a `hint:` line with the next step already in that error. A pipe, a redirect, or `--quiet` keeps the error line only. `--verbose` prints the hint even on a pipe, and when output was written one `context:` line on stderr (`records`). Plain output on stdout is unchanged. `--quiet` together with `--verbose` is exit 2.
 
 | Code | Meaning |
 |---|---|
 | 0 | exited normally. An empty file without `--follow` exits 0 and prints nothing. With `--follow`, an empty file does not exit by itself |
 | 1 | the path is missing and `--follow` is off: stderr says the path does not exist, code 1. With `--follow` the process waits and the code is not 1 |
-| 2 | usage error: missing required argument, invalid `--level`, or the path is a directory |
+| 2 | usage error: missing required argument, invalid `--level`, the path is a directory, or `--quiet` together with `--verbose` |
 | 3 | `--tui` requested without a tty on stdout |
 | 4 | I/O error while reading that cannot be recovered (including: no read permission), or a failed write of `--output`. A missing parent directory is not created |
 
@@ -264,8 +266,8 @@ behavior that is actually wired up.
 
 ## Development
 
-The suite (`cargo test --no-fail-fast`) has 449 passing tests, 0 failing and 1 ignored,
-measured on this `--output` change (parent `0e7d545`).
+The suite (`cargo test --no-fail-fast`) has 456 passing tests, 0 failing and 1 ignored,
+measured on this `--quiet`/`--verbose` change (parent `9057b3e`).
 See `QUALITY.md` for the quality gates.
 
 ```sh

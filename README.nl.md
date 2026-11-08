@@ -35,7 +35,7 @@ op dezelfde manier.
 ## Gebruik
 
 ```
-symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui] [--output PATH]
+symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui] [--output PATH] [--quiet | --verbose]
 symlog --completions <bash|zsh>
 ```
 
@@ -93,26 +93,28 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 | `--no-redact` | toon geheimen ongemaskeerd; standaard worden ze `***` |
 | `--tui` | forceer de TUI; zonder tty op stdout geeft dit exit 3 |
 | `--output <PATH>` | schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt. Niet samen met `--tui` of `--completions` |
+| `--quiet` | verberg de hintregel, ook op een terminal. Geen contextregel. Een pipe laat beide al weg |
+| `--verbose` | toon de hintregel, en als de uitvoer geschreven is één `context:`-regel op stderr, ook bij een pipe. Niet samen met `--quiet` |
 | `--completions <SHELL>` | print een shell-completionscript (`bash` of `zsh`) en eindig met exit 0; `<PATH>` is dan niet nodig |
 | `-h`, `--help` | help |
 | `-V`, `--version` | versie |
 
 ## Exitcodes
 
-0 is geslaagd, 1 is een ontbrekend pad (de enige bevinding die symlog meldt; er is geen drempel), 2 is ongeldige invoer. Code 3 en 4 zijn extra en ongewijzigd. `--version` en `-V` geven exit 0.
+0 is geslaagd, 1 is een ontbrekend pad (de enige bevinding die symlog meldt; er is geen drempel), 2 is ongeldige invoer. Code 3 en 4 zijn extra en ongewijzigd. `--version` en `-V` geven exit 0. Op een terminal print een fout ook een `hint:`-regel met de vervolgstap die al in die fout staat. Een pipe, een redirect of `--quiet` houdt alleen de foutregel. `--verbose` toont de hint ook bij een pipe, en als de uitvoer geschreven is één `context:`-regel op stderr (`records`). De plain-uitvoer op stdout blijft gelijk. `--quiet` samen met `--verbose` is exit 2.
 
 | Code | Betekenis |
 |---|---|
 | 0 | normaal afgesloten (een leeg bestand zonder `--follow` geeft niets en exit 0) |
 | 1 | pad bestaat niet en `--follow` staat uit |
-| 2 | gebruiksfout: ontbrekend argument, ongeldige `--level`, of het pad is een map |
+| 2 | gebruiksfout: ontbrekend argument, ongeldige `--level`, het pad is een map, of `--quiet` samen met `--verbose` |
 | 3 | `--tui` gevraagd zonder tty op stdout |
 | 4 | onherstelbare I/O-fout bij het lezen (ook: geen leesrechten), of een mislukte schrijfactie van `--output`. Een ontbrekende bovenliggende map wordt niet aangemaakt |
 
 ## Kwaliteit
 
-449 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
-deze `--output`-wijziging (ouder `0e7d545`). Zie `QUALITY.md`.
+456 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
+deze `--quiet`/`--verbose`-wijziging (ouder `9057b3e`). Zie `QUALITY.md`.
 
 ## Licentie
 

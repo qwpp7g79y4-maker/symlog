@@ -12,6 +12,8 @@ Options:
       --no-redact            Toon geheimen ongemaskeerd. Standaard worden ze vervangen door `***`
       --tui                  Forceer de TUI; zonder tty op stdout geeft dit exit 3
       --output <PATH>        Schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt
+      --quiet                Verberg de hintregel. Geen contextregel. Een pipe laat beide al weg
+      --verbose              Toon de hintregel, en bij succes één contextregel op stderr. Niet samen met --quiet
       --completions <SHELL>  Print een shell-completionscript (bash of zsh) en stop [possible values: bash, zsh]
   -h, --help                 Print help
   -V, --version              Print version

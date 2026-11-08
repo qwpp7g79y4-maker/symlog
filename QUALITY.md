@@ -3,8 +3,8 @@
 Gates for this branch, measured with `cargo test --no-fail-fast`,
 `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`:
 
-- Tests: 449 passed, 0 failed, 1 ignored (sum over all test binaries), measured on
-  this `--output` change (parent `0e7d545`).
+- Tests: 456 passed, 0 failed, 1 ignored (sum over all test binaries), measured on
+  this `--quiet`/`--verbose` change (parent `9057b3e`).
 - Clippy: clean with `-D warnings`.
 - Fmt: clean.
 

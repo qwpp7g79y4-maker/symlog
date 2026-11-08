@@ -63,6 +63,12 @@ struct Cli {
     /// Schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt.
     #[arg(long, value_name = "PATH", conflicts_with_all = ["tui", "completions"])]
     output: Option<PathBuf>,
+    /// Verberg de hintregel. Geen contextregel. Een pipe laat beide al weg.
+    #[arg(long, conflicts_with = "verbose")]
+    quiet: bool,
+    /// Toon de hintregel, en bij succes één contextregel op stderr. Niet samen met --quiet.
+    #[arg(long, conflicts_with = "quiet")]
+    verbose: bool,
     /// Print een shell-completionscript (bash of zsh) en stop.
     #[arg(long, value_enum, value_name = "SHELL")]
     completions: Option<CompletionShell>,
@@ -86,7 +92,7 @@ impl From<CompletionShell> for Shell {
 
 /// Schrijft het completionscript naar stdout. Een mislukte schrijfactie geeft
 /// exit 4 en een melding, geen paniek.
-fn print_completions(shell: CompletionShell) -> i32 {
+fn print_completions(shell: CompletionShell, extra: bool) -> i32 {
     let mut script = Vec::new();
     generate(
         Shell::from(shell),
@@ -98,9 +104,11 @@ fn print_completions(shell: CompletionShell) -> i32 {
     match stdout.write_all(&script).and_then(|()| stdout.flush()) {
         Ok(()) => 0,
         Err(err) => {
-            let _ = writeln!(
-                io::stderr(),
-                "kan het completionscript niet schrijven: {err}\n  tip: controleer of stdout nog open staat en schijfruimte heeft, of schrijf naar een bestand"
+            emit_message(
+                &format!(
+                    "kan het completionscript niet schrijven: {err}; controleer of stdout nog open staat en schijfruimte heeft, of schrijf naar een bestand"
+                ),
+                extra,
             );
             startup::EXIT_IO_ERROR
         }
@@ -118,23 +126,84 @@ struct RunOptions<'a> {
     colors_enabled: bool,
     /// Maskeer geheimen in de uitvoer. Standaard aan; `--no-redact` zet het uit.
     redact: bool,
+    /// Eén `context:`-regel op stderr nadat de uitvoer geschreven is.
+    verbose: bool,
+    /// Hintregel bij een fout. Uit op een pipe, aan op een terminal, tenzij de vlaggen anders zeggen.
+    extra: bool,
     filter: &'a FilterSpec,
+}
+
+/// Hintregels zijn extra context.
+///
+/// Een terminal toont ze. Een pipe of een redirect niet, zodat vastgelegde stderr
+/// de foutregel blijft. `--verbose` toont ze toch. `--quiet` verbergt ze ook op
+/// een terminal. De plain-uitvoer op stdout blijft gelijk. Beide vlaggen samen
+/// zijn een clap-gebruiksfout en komen nooit bij een rapport.
+fn show_extra(quiet: bool, verbose: bool, terminal: bool) -> bool {
+    if quiet {
+        false
+    } else if verbose {
+        true
+    } else {
+        terminal
+    }
+}
+
+/// De vervolgstap staat al in de fout, na `; ` of `. `.
+fn next_step(message: &str) -> Option<&str> {
+    let semi = message.find("; ").map(|index| index + 2);
+    let dot = message.find(". ").map(|index| index + 2);
+    let start = match (semi, dot) {
+        (Some(left), Some(right)) => Some(left.min(right)),
+        (Some(left), None) => Some(left),
+        (None, Some(right)) => Some(right),
+        (None, None) => None,
+    }?;
+    let tail = message[start..].trim();
+    if tail.is_empty() {
+        None
+    } else {
+        Some(tail)
+    }
+}
+
+fn emit_to(err_out: &mut impl Write, message: &str, extra: bool) {
+    let _ = writeln!(err_out, "{message}");
+    if extra {
+        if let Some(hint) = next_step(message) {
+            let _ = writeln!(err_out, "hint: {hint}");
+        }
+    }
+}
+
+fn emit_message(message: &str, extra: bool) {
+    emit_to(&mut io::stderr(), message, extra);
+}
+
+fn emit_context(err_out: &mut impl Write, records: impl std::fmt::Display, verbose: bool) {
+    if verbose {
+        let _ = writeln!(err_out, "context: records {records}");
+    }
 }
 
 fn main() {
     let cli = Cli::parse();
+    let extra = show_extra(cli.quiet, cli.verbose, io::stderr().is_terminal());
     if let Some(shell) = cli.completions {
-        std::process::exit(print_completions(shell));
+        std::process::exit(print_completions(shell, extra));
     }
     let Some(path) = cli.path.as_deref() else {
         // `required_unless_present` laat dit niet toe; dit is alleen een vangnet.
-        eprintln!("het pad naar het logbestand ontbreekt\n  tip: geef een pad of `-` mee, zie `symlog --help`");
+        emit_message(
+            "het pad naar het logbestand ontbreekt; geef een pad of `-` mee, zie `symlog --help`",
+            extra,
+        );
         std::process::exit(startup::EXIT_USAGE);
     };
     let filter = match build_filter(cli.level.as_deref(), &cli.channels) {
         Ok(filter) => filter,
         Err(message) => {
-            eprintln!("{message}");
+            emit_message(&message, extra);
             std::process::exit(startup::EXIT_USAGE);
         }
     };
@@ -148,6 +217,8 @@ fn main() {
         stdout_is_tty,
         colors_enabled: plain::colors_enabled(stdout_is_tty, cli.no_color, no_color_env_set),
         redact: !cli.no_redact,
+        verbose: cli.verbose,
+        extra,
         filter: &filter,
     };
     if let Some(out_path) = cli.output.as_deref() {
@@ -155,13 +226,13 @@ fn main() {
             Ok(mut file) => {
                 let code = run(path, &opts, &mut io::stderr(), &mut file);
                 if let Err(err) = file.flush() {
-                    eprintln!("{}", output_write_error(out_path, &err));
+                    emit_message(&output_write_error(out_path, &err), extra);
                     std::process::exit(startup::EXIT_IO_ERROR);
                 }
                 std::process::exit(code);
             }
             Err(err) => {
-                eprintln!("{}", output_write_error(out_path, &err));
+                emit_message(&output_write_error(out_path, &err), extra);
                 std::process::exit(startup::EXIT_IO_ERROR);
             }
         }
@@ -206,10 +277,11 @@ fn build_filter(level: Option<&str>, channels: &[String]) -> Result<FilterSpec, 
 /// echte exitcode en tekst van de gecompileerde binary controleren).
 fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl Write) -> i32 {
     if opts.want_tui && !opts.stdout_is_tty {
-        let _ = writeln!(
+        emit_to(
             err_out,
             "--tui vereist een terminal op stdout; zonder tty is er alleen --plain \
-             (of de automatische terugval daarop); laat --tui weg of start symlog in een echte terminal"
+             (of de automatische terugval daarop); laat --tui weg of start symlog in een echte terminal",
+            opts.extra,
         );
         return startup::EXIT_TUI_REQUIRES_TTY;
     }
@@ -232,23 +304,15 @@ fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl 
 
     match startup::outcome_for(path, classification) {
         Outcome::Exit { message, code } => {
-            let _ = writeln!(err_out, "{message}");
+            emit_to(err_out, &message, opts.extra);
             code
         }
         Outcome::Empty | Outcome::Ready => {
             let use_plain = opts.want_plain || !opts.stdout_is_tty;
             if use_plain {
-                run_plain_mode(
-                    path,
-                    opts.follow,
-                    opts.filter,
-                    opts.colors_enabled,
-                    opts.redact,
-                    out,
-                    err_out,
-                )
+                run_plain_mode(path, opts, out, err_out)
             } else {
-                run_tui_mode(path, opts.follow, opts.filter, opts.redact)
+                run_tui_mode(path, opts)
             }
         }
     }
@@ -260,10 +324,11 @@ fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl 
 /// gebruiksfout (exit 2).
 fn run_stdin_mode(opts: &RunOptions, err_out: &mut impl Write, out: &mut impl Write) -> i32 {
     if opts.follow || opts.want_tui {
-        let _ = writeln!(
+        emit_to(
             err_out,
             "stdin (`-`) werkt alleen als streaming plain-uitvoer; --follow en --tui zijn niet beschikbaar; \
-             laat --follow en --tui weg, of geef een bestandspad op in plaats van `-`"
+             laat --follow en --tui weg, of geef een bestandspad op in plaats van `-`",
+            opts.extra,
         );
         return startup::EXIT_USAGE;
     }
@@ -276,11 +341,20 @@ fn run_stdin_mode(opts: &RunOptions, err_out: &mut impl Write, out: &mut impl Wr
         opts.redact,
         writer,
     ) {
-        Ok(_) => 0,
+        Ok(count) => {
+            emit_context(err_out, count, opts.verbose);
+            0
+        }
         // `symlog - | head`: de lezer sloot de pijp, dat is geen fout.
         Err(err) if err.kind() == io::ErrorKind::BrokenPipe => 0,
         Err(err) => {
-            let _ = writeln!(err_out, "stdin: lezen of schrijven mislukt ({err}); controleer of de invoerpijp en de uitvoer (schijf of pijp) nog open staan");
+            emit_to(
+                err_out,
+                &format!(
+                    "stdin: lezen of schrijven mislukt ({err}); controleer of de invoerpijp en de uitvoer (schijf of pijp) nog open staan"
+                ),
+                opts.extra,
+            );
             startup::EXIT_IO_ERROR
         }
     }
@@ -304,26 +378,26 @@ fn flush_failure_message(path: &Path, err: &io::Error) -> String {
 /// dat al voor de oude, ongekoppelde `follow_forever` controleerde).
 fn run_plain_mode(
     path: &Path,
-    follow: bool,
-    filter: &FilterSpec,
-    colors_enabled: bool,
-    redact: bool,
+    opts: &RunOptions,
     out: &mut impl Write,
     err_out: &mut impl Write,
 ) -> i32 {
     let mut follower = Follower::open(path);
     let mut printer = PlainPrinter::new();
-    printer.set_redact(redact);
+    printer.set_redact(opts.redact);
 
     if let Err(err) = follower.tick() {
-        let _ = writeln!(
+        emit_to(
             err_out,
-            "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-            path.display()
+            &format!(
+                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+                path.display()
+            ),
+            opts.extra,
         );
         return startup::EXIT_IO_ERROR;
     }
-    if !follow {
+    if !opts.follow {
         // Een eenmalige run groeit nooit meer verder: sluit de generatie af zodat een
         // staartregel zonder afsluitende `\n` alsnog verschijnt (geredigeerd), net als
         // de TUI-weg via `IndexScanner::finish` (breaktest-symlog-0004 bevinding 1).
@@ -331,15 +405,16 @@ fn run_plain_mode(
         // niet aangeroepen, zie het commentaar daar.
         follower.finish();
     }
-    if let Err(err) = printer.flush(&follower, filter, colors_enabled, out) {
-        let _ = writeln!(err_out, "{}", flush_failure_message(path, &err));
-        if !follow {
+    if let Err(err) = printer.flush(&follower, opts.filter, opts.colors_enabled, out) {
+        emit_to(err_out, &flush_failure_message(path, &err), opts.extra);
+        if !opts.follow {
             return startup::EXIT_IO_ERROR;
         }
-    }
-
-    if !follow {
-        return 0;
+    } else {
+        emit_context(err_out, follower.total_record_count(), opts.verbose);
+        if !opts.follow {
+            return 0;
+        }
     }
 
     let watcher = Watcher::new(path, DEFAULT_POLL_INTERVAL);
@@ -349,15 +424,18 @@ fn run_plain_mode(
             // Herstelbaar (task.md T10 "Blijft"): de volgende tick detecteert een
             // eventuele afkapping of rotatie gewoon opnieuw via `stat`, dus dit stopt
             // het volgen niet.
-            let _ = writeln!(
+            emit_to(
                 err_out,
-                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-                path.display()
+                &format!(
+                    "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+                    path.display()
+                ),
+                opts.extra,
             );
             continue;
         }
-        if let Err(err) = printer.flush(&follower, filter, colors_enabled, out) {
-            let _ = writeln!(err_out, "{}", flush_failure_message(path, &err));
+        if let Err(err) = printer.flush(&follower, opts.filter, opts.colors_enabled, out) {
+            emit_to(err_out, &flush_failure_message(path, &err), opts.extra);
         }
     }
 }
@@ -370,21 +448,27 @@ fn run_plain_mode(
 /// ([`App::toggle_follow`]): live bijwerken tijdens de TUI-sessie zelf hoort niet bij
 /// task.md T13 "Doet" (dat vraagt alleen "`--follow` werkt ook in plain"), dus dat
 /// blijft het bestaande, niet-levende follow-statusveld uit T8.
-fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) -> i32 {
+fn run_tui_mode(path: &Path, opts: &RunOptions) -> i32 {
     let mut reader = match Reader::open(path) {
         Ok(reader) => reader,
         Err(err) => {
-            eprintln!(
-                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-                path.display()
+            emit_message(
+                &format!(
+                    "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+                    path.display()
+                ),
+                opts.extra,
             );
             return startup::EXIT_IO_ERROR;
         }
     };
     if let Err(err) = reader.wait_until_indexed() {
-        eprintln!(
-            "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-            path.display()
+        emit_message(
+            &format!(
+                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+                path.display()
+            ),
+            opts.extra,
         );
         return startup::EXIT_IO_ERROR;
     }
@@ -395,18 +479,31 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) ->
             Ok(Some(bytes)) => records.push(symlog::parse::parse_record_lossy(&bytes)),
             Ok(None) => break,
             Err(err) => {
-                eprintln!("{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is", path.display());
+                emit_message(
+                    &format!(
+                        "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+                        path.display()
+                    ),
+                    opts.extra,
+                );
                 return startup::EXIT_IO_ERROR;
             }
         }
     }
 
+    let record_count = records.len();
     if records.is_empty() {
         return match run_in_terminal(run_empty_message_loop) {
-            Ok(()) => 0,
+            Ok(()) => {
+                emit_context(&mut io::stderr(), record_count, opts.verbose);
+                0
+            }
             Err(err) => {
-                eprintln!(
-                    "terminalfout: {err}; start symlog in een echte terminal of gebruik --plain"
+                emit_message(
+                    &format!(
+                        "terminalfout: {err}; start symlog in een echte terminal of gebruik --plain"
+                    ),
+                    opts.extra,
                 );
                 startup::EXIT_IO_ERROR
             }
@@ -414,9 +511,9 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) ->
     }
 
     let mut app = App::new(records);
-    app.set_redact(redact);
-    app.set_filter(filter.clone());
-    if follow {
+    app.set_redact(opts.redact);
+    app.set_filter(opts.filter.clone());
+    if opts.follow {
         app.toggle_follow();
     }
 
@@ -425,10 +522,16 @@ fn run_tui_mode(path: &Path, follow: bool, filter: &FilterSpec, redact: bool) ->
             if let Some(copy) = app.copy_on_exit() {
                 println!("{}", symlog::redact::for_display(copy, app.redact()));
             }
+            emit_context(&mut io::stderr(), record_count, opts.verbose);
             0
         }
         Err(err) => {
-            eprintln!("terminalfout: {err}; start symlog in een echte terminal of gebruik --plain");
+            emit_message(
+                &format!(
+                    "terminalfout: {err}; start symlog in een echte terminal of gebruik --plain"
+                ),
+                opts.extra,
+            );
             startup::EXIT_IO_ERROR
         }
     }
@@ -499,6 +602,28 @@ mod tests {
     use super::*;
     use symlog::model::Level;
 
+    #[test]
+    fn extra_follows_quiet_verbose_and_the_terminal() {
+        assert!(!show_extra(true, false, true));
+        assert!(show_extra(false, true, false));
+        assert!(!show_extra(false, false, false));
+        assert!(show_extra(false, false, true));
+        assert!(!show_extra(true, true, true));
+    }
+
+    #[test]
+    fn next_step_is_the_clause_after_the_first_separator() {
+        assert_eq!(
+            next_step("ontbreekt. Geef een pad op"),
+            Some("Geef een pad op")
+        );
+        assert_eq!(
+            next_step("lezen mislukt; controleer het bestand"),
+            Some("controleer het bestand")
+        );
+        assert_eq!(next_step("geen scheiding"), None);
+    }
+
     fn write_file(path: &Path, content: &[u8]) {
         std::fs::File::create(path)
             .expect("create")
@@ -514,6 +639,8 @@ mod tests {
             stdout_is_tty: false,
             colors_enabled: false,
             redact: true,
+            verbose: false,
+            extra: false,
             filter,
         }
     }
@@ -596,6 +723,8 @@ mod tests {
             stdout_is_tty: false,
             colors_enabled: false,
             redact: true,
+            verbose: false,
+            extra: false,
             filter: &filter,
         };
         let mut err = Vec::new();
@@ -621,6 +750,8 @@ mod tests {
             stdout_is_tty: false,
             colors_enabled: false,
             redact: true,
+            verbose: false,
+            extra: false,
             filter: &filter,
         };
         let mut err = Vec::new();
