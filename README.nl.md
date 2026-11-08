@@ -101,7 +101,7 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 
 ## Exitcodes
 
-0 is geslaagd, 1 is een ontbrekend pad (de enige bevinding die symlog meldt; er is geen drempel), 2 is ongeldige invoer. Code 3 en 4 zijn extra en ongewijzigd. `--version` en `-V` geven exit 0. Op een terminal print een fout ook een `hint:`-regel met de vervolgstap die al in die fout staat. Een pipe, een redirect of `--quiet` houdt alleen de foutregel. `--verbose` toont de hint ook bij een pipe, en als de uitvoer geschreven is één `context:`-regel op stderr (`records`). De plain-uitvoer op stdout blijft gelijk. `--quiet` samen met `--verbose` is exit 2.
+0 is geslaagd, 1 is een ontbrekend pad (de enige bevinding die symlog meldt; er is geen drempel), 2 is ongeldige invoer. Code 3 en 4 zijn extra en ongewijzigd. SIGINT eindigt met exit 130: stderr is `onderbroken door SIGINT`, en een eenmalig `--output`-bestand wordt niet vervangen door een half rapport. `--version` en `-V` geven exit 0. Op een terminal print een fout ook een `hint:`-regel met de vervolgstap die al in die fout staat. Een pipe, een redirect of `--quiet` houdt alleen de foutregel. `--verbose` toont de hint ook bij een pipe, en als de uitvoer geschreven is één `context:`-regel op stderr (`records`). De plain-uitvoer op stdout blijft gelijk. `--quiet` samen met `--verbose` is exit 2.
 
 | Code | Betekenis |
 |---|---|
@@ -110,11 +110,13 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 | 2 | gebruiksfout: ontbrekend argument, ongeldige `--level`, het pad is een map, een gewoon bestand boven 268435456 bytes (256 MiB), of `--quiet` samen met `--verbose`. Een bestand boven die grens wordt niet ingelezen |
 | 3 | `--tui` gevraagd zonder tty op stdout |
 | 4 | onherstelbare I/O-fout bij het lezen (ook: geen leesrechten), of een mislukte schrijfactie van `--output`. Een ontbrekende bovenliggende map wordt niet aangemaakt |
+| 130 | SIGINT. Geen half eenmalig rapport. Een bestaand `--output`-bestand blijft staan als het nieuwe rapport niet af was. Stderr is `onderbroken door SIGINT`. Gewone codes 0, 1, 2, 3 en 4 blijven |
 
 ## Kwaliteit
 
-457 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
-deze invoerlimiet-wijziging (ouder `43e4fee`). Zie `QUALITY.md`.
+458 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
+deze SIGINT-wijziging (ouder `f1aa765`) op linux x86_64. `tests/sigint.rs` wordt alleen
+op dat doel gebouwd. Zie `QUALITY.md`.
 
 ## Licentie
 

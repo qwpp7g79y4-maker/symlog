@@ -3,9 +3,17 @@
 Gates for this branch, measured with `cargo test --no-fail-fast`,
 `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`:
 
-- Tests: 457 passed, 0 failed, 1 ignored (sum over all test binaries), measured on
-  this input-limit change (parent `43e4fee`). The 100 MiB row and the line-coverage
-  row stay the earlier measurement.
+- Tests: 458 passed, 0 failed, 1 ignored (sum over all test binaries), measured on
+  this SIGINT change (parent `f1aa765`) on linux x86_64. `tests/sigint.rs` is built
+  only on that target. The 100 MiB row and the line-coverage row stay the earlier
+  measurement.
+
+## SIGINT (2026-11-08, W-48, branch prep/w24-fout)
+
+- SIGINT exits 130. Stderr is `onderbroken door SIGINT`. A one-shot `--output` report does not replace the previous file until the new report is complete, and a signal before that leaves no temporary file. `tests/sigint.rs` sends the signal through a pidfd of the child it spawned. Ordinary exit codes stay 0, 1, 2, 3 and 4. The regular-file limit stays 268435456 bytes. The 16 MiB cap per line and per record on stdin stays. A missing parent directory for `--output` stays exit 4.
+- `cargo test --no-fail-fast`: 458 passed / 0 failed / 1 ignored.
+- `cargo fmt --check`: clean. `cargo clippy --all-targets -- -D warnings`: clean.
+- Version stays 1.0.0. `rust-version` stays 1.88.
 - Clippy: clean with `-D warnings`.
 - Fmt: clean.
 

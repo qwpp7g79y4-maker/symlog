@@ -96,9 +96,27 @@ pub fn classify(path: &Path) -> Classification {
 /// eerste keer wachten, zodat de aanroeper één keer een "wacht op ..."-boodschap kan
 /// tonen in plaats van bij elke poll-tick.
 pub fn wait_until_present(path: &Path, on_first_wait: impl FnOnce()) -> Classification {
+    match wait_until_present_or_stop(path, on_first_wait, || false) {
+        Some(found) => found,
+        None => Classification::Missing,
+    }
+}
+
+/// Als [`wait_until_present`], maar `None` zodra `stop` waar is.
+///
+/// `stop` wordt bekeken vóór elke wacht. Een blokkade in `Watcher::wait` eindigt
+/// pas bij de volgende wake (notify of de poll van 500 ms).
+pub fn wait_until_present_or_stop(
+    path: &Path,
+    on_first_wait: impl FnOnce(),
+    stop: impl Fn() -> bool,
+) -> Option<Classification> {
     let watcher = Watcher::new(path, DEFAULT_POLL_INTERVAL);
     let mut on_first_wait = Some(on_first_wait);
     loop {
+        if stop() {
+            return None;
+        }
         match classify(path) {
             Classification::Missing => {
                 if let Some(f) = on_first_wait.take() {
@@ -106,7 +124,7 @@ pub fn wait_until_present(path: &Path, on_first_wait: impl FnOnce()) -> Classifi
                 }
                 watcher.wait();
             }
-            other => return other,
+            other => return Some(other),
         }
     }
 }

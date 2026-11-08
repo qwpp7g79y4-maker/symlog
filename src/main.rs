@@ -10,6 +10,8 @@
 //! hebben (`--level`, `--channel`). Stdin (`-`) loopt via [`symlog::plain::stream_plain`]
 //! (W-05), los van [`symlog::reader`].
 
+mod interrupt;
+
 use clap::{CommandFactory, Parser, ValueEnum};
 use clap_complete::{generate, Shell};
 use ratatui::backend::CrosstermBackend;
@@ -23,6 +25,7 @@ use ratatui::widgets::Paragraph;
 use ratatui::Terminal;
 use std::io::{self, IsTerminal, Write};
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 use symlog::filter::{ChannelFilter, FilterSpec, LevelFilter};
 use symlog::follow::{Follower, Watcher, DEFAULT_POLL_INTERVAL};
 use symlog::plain::{self, PlainPrinter};
@@ -102,7 +105,9 @@ fn print_completions(shell: CompletionShell, extra: bool) -> i32 {
     );
     let mut stdout = io::stdout().lock();
     match stdout.write_all(&script).and_then(|()| stdout.flush()) {
+        Ok(()) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
         Ok(()) => 0,
+        Err(_) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
         Err(err) => {
             emit_message(
                 &format!(
@@ -187,10 +192,11 @@ fn emit_context(err_out: &mut impl Write, records: impl std::fmt::Display, verbo
 }
 
 fn main() {
+    interrupt::install();
     let cli = Cli::parse();
     let extra = show_extra(cli.quiet, cli.verbose, io::stderr().is_terminal());
     if let Some(shell) = cli.completions {
-        std::process::exit(print_completions(shell, extra));
+        exit_or_interrupt(print_completions(shell, extra), extra);
     }
     let Some(path) = cli.path.as_deref() else {
         // `required_unless_present` laat dit niet toe; dit is alleen een vangnet.
@@ -198,13 +204,13 @@ fn main() {
             "het pad naar het logbestand ontbreekt; geef een pad of `-` mee, zie `symlog --help`",
             extra,
         );
-        std::process::exit(startup::EXIT_USAGE);
+        exit_or_interrupt(startup::EXIT_USAGE, extra);
     };
     let filter = match build_filter(cli.level.as_deref(), &cli.channels) {
         Ok(filter) => filter,
         Err(message) => {
             emit_message(&message, extra);
-            std::process::exit(startup::EXIT_USAGE);
+            exit_or_interrupt(startup::EXIT_USAGE, extra);
         }
     };
     let to_file = cli.output.is_some();
@@ -222,23 +228,132 @@ fn main() {
         filter: &filter,
     };
     if let Some(out_path) = cli.output.as_deref() {
-        match std::fs::File::create(out_path) {
-            Ok(mut file) => {
-                let code = run(path, &opts, &mut io::stderr(), &mut file);
-                if let Err(err) = file.flush() {
-                    emit_message(&output_write_error(out_path, &err), extra);
-                    std::process::exit(startup::EXIT_IO_ERROR);
-                }
-                std::process::exit(code);
-            }
-            Err(err) => {
-                emit_message(&output_write_error(out_path, &err), extra);
-                std::process::exit(startup::EXIT_IO_ERROR);
-            }
-        }
+        let code = if opts.follow {
+            write_follow_output(out_path, path, &opts, extra)
+        } else {
+            publish_report(out_path, path, &opts, extra)
+        };
+        exit_or_interrupt(code, extra);
     }
     let code = run(path, &opts, &mut io::stderr(), &mut io::stdout());
+    exit_or_interrupt(code, extra);
+}
+
+/// Stopt het proces. SIGINT eindigt met 130 en één stderr-regel, ook als `code`
+/// al een gewone fout was. De gewone codes worden niet hernummerd.
+fn exit_or_interrupt(code: i32, extra: bool) -> ! {
+    if code == interrupt::EXIT_INTERRUPTED || interrupt::interrupted() {
+        emit_message(interrupt::INTERRUPTED_MESSAGE, extra);
+        std::process::exit(interrupt::EXIT_INTERRUPTED);
+    }
     std::process::exit(code);
+}
+
+/// Tijdelijk rapport naast `path`. Verdwijnt bij drop, ook na een geslaagde
+/// hernoeming (dan bestaat de tijdelijke naam niet meer).
+struct TempReport(PathBuf);
+
+impl Drop for TempReport {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
+}
+
+/// Pad van een tijdelijk bestand naast `path`, zodat een af rapport `path` in
+/// één hernoeming vervangt. SIGINT vóór die hernoeming verwijdert het tijdelijke
+/// bestand en laat `path` zoals het was.
+fn temp_beside(path: &Path) -> PathBuf {
+    let parent = path
+        .parent()
+        .filter(|parent| !parent.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let mut name = std::ffi::OsString::from(".");
+    name.push(path.file_name().unwrap_or(std::ffi::OsStr::new("rapport")));
+    name.push(format!(".symlog-{}.tmp", std::process::id()));
+    parent.join(name)
+}
+
+/// Schrijft een eenmalig rapport naar een tijdelijk bestand en publiceert het
+/// pas als het af is. Een ontbrekende bovenliggende map blijft exit 4 en wordt
+/// niet aangemaakt. SIGINT laat het vorige bestand staan en geeft 130.
+fn publish_report(path: &Path, log_path: &Path, opts: &RunOptions<'_>, extra: bool) -> i32 {
+    if interrupt::interrupted() {
+        return interrupt::EXIT_INTERRUPTED;
+    }
+    let tmp = temp_beside(path);
+    let mut file = match std::fs::File::create(&tmp) {
+        Ok(file) => file,
+        Err(err) => {
+            if interrupt::interrupted() {
+                return interrupt::EXIT_INTERRUPTED;
+            }
+            emit_message(&output_write_error(path, &err), extra);
+            return startup::EXIT_IO_ERROR;
+        }
+    };
+    let _guard = TempReport(tmp.clone());
+    let code = run(log_path, opts, &mut io::stderr(), &mut file);
+    if let Err(err) = file.flush() {
+        if interrupt::interrupted() {
+            return interrupt::EXIT_INTERRUPTED;
+        }
+        emit_message(&output_write_error(path, &err), extra);
+        return startup::EXIT_IO_ERROR;
+    }
+    drop(file);
+    if code != 0 || interrupt::interrupted() {
+        if interrupt::interrupted() || code == interrupt::EXIT_INTERRUPTED {
+            return interrupt::EXIT_INTERRUPTED;
+        }
+        return code;
+    }
+    let renamed = interrupt::with_sigint_blocked(|| {
+        if interrupt::interrupted() {
+            return None;
+        }
+        Some(std::fs::rename(&tmp, path))
+    });
+    match renamed {
+        None => interrupt::EXIT_INTERRUPTED,
+        Some(Ok(())) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
+        Some(Ok(())) => 0,
+        Some(Err(_)) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
+        Some(Err(err)) => {
+            emit_message(&output_write_error(path, &err), extra);
+            startup::EXIT_IO_ERROR
+        }
+    }
+}
+
+/// `--follow` schrijft meteen naar het doel, omdat de stroom niet op een
+/// eindig rapport wacht. SIGINT stopt de stroom met 130.
+fn write_follow_output(path: &Path, log_path: &Path, opts: &RunOptions<'_>, extra: bool) -> i32 {
+    if interrupt::interrupted() {
+        return interrupt::EXIT_INTERRUPTED;
+    }
+    match std::fs::File::create(path) {
+        Ok(mut file) => {
+            let code = run(log_path, opts, &mut io::stderr(), &mut file);
+            if let Err(err) = file.flush() {
+                if interrupt::interrupted() || code == interrupt::EXIT_INTERRUPTED {
+                    return interrupt::EXIT_INTERRUPTED;
+                }
+                emit_message(&output_write_error(path, &err), extra);
+                return startup::EXIT_IO_ERROR;
+            }
+            if interrupt::interrupted() {
+                return interrupt::EXIT_INTERRUPTED;
+            }
+            code
+        }
+        Err(err) => {
+            if interrupt::interrupted() {
+                return interrupt::EXIT_INTERRUPTED;
+            }
+            emit_message(&output_write_error(path, &err), extra);
+            startup::EXIT_IO_ERROR
+        }
+    }
 }
 
 /// Fouttekst als `--output` niet geschreven kan worden. Exitcode blijft 4,
@@ -276,6 +391,9 @@ fn build_filter(level: Option<&str>, channels: &[String]) -> Result<FilterSpec, 
 /// `tests/startup_cli.rs`/`tests/plain_cli.rs` voor de subproces-tests die ook de
 /// echte exitcode en tekst van de gecompileerde binary controleren).
 fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl Write) -> i32 {
+    if interrupt::interrupted() {
+        return interrupt::EXIT_INTERRUPTED;
+    }
     if opts.want_tui && !opts.stdout_is_tty {
         emit_to(
             err_out,
@@ -293,9 +411,18 @@ fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl 
     let classification = startup::classify(path);
     let classification = if opts.follow {
         match classification {
-            startup::Classification::Missing => startup::wait_until_present(path, || {
-                let _ = writeln!(err_out, "wacht op {}...", path.display());
-            }),
+            startup::Classification::Missing => {
+                match startup::wait_until_present_or_stop(
+                    path,
+                    || {
+                        let _ = writeln!(err_out, "wacht op {}...", path.display());
+                    },
+                    interrupt::interrupted,
+                ) {
+                    Some(found) => found,
+                    None => return interrupt::EXIT_INTERRUPTED,
+                }
+            }
             other => other,
         }
     } else {
@@ -341,10 +468,12 @@ fn run_stdin_mode(opts: &RunOptions, err_out: &mut impl Write, out: &mut impl Wr
         opts.redact,
         writer,
     ) {
+        Ok(_) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
         Ok(count) => {
             emit_context(err_out, count, opts.verbose);
             0
         }
+        Err(_) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
         // `symlog - | head`: de lezer sloot de pijp, dat is geen fout.
         Err(err) if err.kind() == io::ErrorKind::BrokenPipe => 0,
         Err(err) => {
@@ -387,6 +516,9 @@ fn run_plain_mode(
     printer.set_redact(opts.redact);
 
     if let Err(err) = follower.tick() {
+        if interrupt::interrupted() {
+            return interrupt::EXIT_INTERRUPTED;
+        }
         emit_to(
             err_out,
             &format!(
@@ -406,10 +538,15 @@ fn run_plain_mode(
         follower.finish();
     }
     if let Err(err) = printer.flush(&follower, opts.filter, opts.colors_enabled, out) {
+        if interrupt::interrupted() {
+            return interrupt::EXIT_INTERRUPTED;
+        }
         emit_to(err_out, &flush_failure_message(path, &err), opts.extra);
         if !opts.follow {
             return startup::EXIT_IO_ERROR;
         }
+    } else if interrupt::interrupted() {
+        return interrupt::EXIT_INTERRUPTED;
     } else {
         emit_context(err_out, follower.total_record_count(), opts.verbose);
         if !opts.follow {
@@ -419,8 +556,17 @@ fn run_plain_mode(
 
     let watcher = Watcher::new(path, DEFAULT_POLL_INTERVAL);
     loop {
+        if interrupt::interrupted() {
+            return interrupt::EXIT_INTERRUPTED;
+        }
         watcher.wait();
+        if interrupt::interrupted() {
+            return interrupt::EXIT_INTERRUPTED;
+        }
         if let Err(err) = follower.tick() {
+            if interrupt::interrupted() {
+                return interrupt::EXIT_INTERRUPTED;
+            }
             // Herstelbaar (task.md T10 "Blijft"): de volgende tick detecteert een
             // eventuele afkapping of rotatie gewoon opnieuw via `stat`, dus dit stopt
             // het volgen niet.
@@ -435,6 +581,9 @@ fn run_plain_mode(
             continue;
         }
         if let Err(err) = printer.flush(&follower, opts.filter, opts.colors_enabled, out) {
+            if interrupt::interrupted() {
+                return interrupt::EXIT_INTERRUPTED;
+            }
             emit_to(err_out, &flush_failure_message(path, &err), opts.extra);
         }
     }
@@ -451,26 +600,10 @@ fn run_plain_mode(
 fn run_tui_mode(path: &Path, opts: &RunOptions) -> i32 {
     let mut reader = match Reader::open(path) {
         Ok(reader) => reader,
-        Err(err) => {
-            emit_message(
-                &format!(
-                    "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-                    path.display()
-                ),
-                opts.extra,
-            );
-            return startup::EXIT_IO_ERROR;
-        }
+        Err(err) => return read_error(path, &err, opts.extra),
     };
     if let Err(err) = reader.wait_until_indexed() {
-        emit_message(
-            &format!(
-                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-                path.display()
-            ),
-            opts.extra,
-        );
-        return startup::EXIT_IO_ERROR;
+        return read_error(path, &err, opts.extra);
     }
 
     let mut records = Vec::with_capacity(reader.record_count());
@@ -478,35 +611,20 @@ fn run_tui_mode(path: &Path, opts: &RunOptions) -> i32 {
         match reader.record_bytes(i) {
             Ok(Some(bytes)) => records.push(symlog::parse::parse_record_lossy(&bytes)),
             Ok(None) => break,
-            Err(err) => {
-                emit_message(
-                    &format!(
-                        "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-                        path.display()
-                    ),
-                    opts.extra,
-                );
-                return startup::EXIT_IO_ERROR;
-            }
+            Err(err) => return read_error(path, &err, opts.extra),
         }
     }
 
     let record_count = records.len();
     if records.is_empty() {
         return match run_in_terminal(run_empty_message_loop) {
+            Ok(()) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
             Ok(()) => {
                 emit_context(&mut io::stderr(), record_count, opts.verbose);
                 0
             }
-            Err(err) => {
-                emit_message(
-                    &format!(
-                        "terminalfout: {err}; start symlog in een echte terminal of gebruik --plain"
-                    ),
-                    opts.extra,
-                );
-                startup::EXIT_IO_ERROR
-            }
+            Err(_) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
+            Err(err) => terminal_error(&err, opts.extra),
         };
     }
 
@@ -518,6 +636,7 @@ fn run_tui_mode(path: &Path, opts: &RunOptions) -> i32 {
     }
 
     match run_in_terminal(|terminal| run_app_loop(terminal, &mut app)) {
+        Ok(()) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
         Ok(()) => {
             if let Some(copy) = app.copy_on_exit() {
                 println!("{}", symlog::redact::for_display(copy, app.redact()));
@@ -525,16 +644,34 @@ fn run_tui_mode(path: &Path, opts: &RunOptions) -> i32 {
             emit_context(&mut io::stderr(), record_count, opts.verbose);
             0
         }
-        Err(err) => {
-            emit_message(
-                &format!(
-                    "terminalfout: {err}; start symlog in een echte terminal of gebruik --plain"
-                ),
-                opts.extra,
-            );
-            startup::EXIT_IO_ERROR
-        }
+        Err(_) if interrupt::interrupted() => interrupt::EXIT_INTERRUPTED,
+        Err(err) => terminal_error(&err, opts.extra),
     }
+}
+
+fn read_error(path: &Path, err: &io::Error, extra: bool) -> i32 {
+    if interrupt::interrupted() {
+        return interrupt::EXIT_INTERRUPTED;
+    }
+    emit_message(
+        &format!(
+            "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
+            path.display()
+        ),
+        extra,
+    );
+    startup::EXIT_IO_ERROR
+}
+
+fn terminal_error(err: &io::Error, extra: bool) -> i32 {
+    if interrupt::interrupted() {
+        return interrupt::EXIT_INTERRUPTED;
+    }
+    emit_message(
+        &format!("terminalfout: {err}; start symlog in een echte terminal of gebruik --plain"),
+        extra,
+    );
+    startup::EXIT_IO_ERROR
 }
 
 /// Zet raw mode en het alternate screen aan, voert `body` uit en herstelt de terminal
@@ -567,25 +704,47 @@ where
     result
 }
 
+/// Hoe lang de TUI wacht op een toets voordat hij SIGINT opnieuw bekijkt.
+const EVENT_WAIT: Duration = Duration::from_millis(200);
+
+fn event_ready() -> io::Result<bool> {
+    match event::poll(EVENT_WAIT) {
+        Ok(ready) => Ok(ready),
+        Err(_) if interrupt::interrupted() => Ok(false),
+        Err(err) => Err(err),
+    }
+}
+
 fn run_app_loop(terminal: &mut CrosstermTerminal, app: &mut App) -> io::Result<()> {
+    terminal.draw(|frame| view::render(frame, app))?;
     loop {
-        terminal.draw(|frame| view::render(frame, app))?;
-        if app.should_quit() {
+        if interrupt::interrupted() || app.should_quit() {
             return Ok(());
+        }
+        if !event_ready()? {
+            continue;
         }
         if let Event::Key(key) = event::read()? {
             keys::handle_key(app, key);
         }
+        terminal.draw(|frame| view::render(frame, app))?;
     }
 }
 
 /// Task.md T11 "Doet": "TUI opent met de melding 'log is leeg'"; elke toets sluit af.
 fn run_empty_message_loop(terminal: &mut CrosstermTerminal) -> io::Result<()> {
+    terminal.draw(render_empty_message)?;
     loop {
-        terminal.draw(render_empty_message)?;
+        if interrupt::interrupted() {
+            return Ok(());
+        }
+        if !event_ready()? {
+            continue;
+        }
         if let Event::Key(_) = event::read()? {
             return Ok(());
         }
+        terminal.draw(render_empty_message)?;
     }
 }
 

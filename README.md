@@ -189,7 +189,7 @@ replaces these values with `***`:
 
 ## Exit codes
 
-0 is success, 1 is a missing path (the only finding symlog reports; it has no threshold), 2 is invalid input. Codes 3 and 4 are extra and unchanged. `--version` and `-V` exit 0. On a terminal, an error also prints a `hint:` line with the next step already in that error. A pipe, a redirect, or `--quiet` keeps the error line only. `--verbose` prints the hint even on a pipe, and when output was written one `context:` line on stderr (`records`). Plain output on stdout is unchanged. `--quiet` together with `--verbose` is exit 2.
+0 is success, 1 is a missing path (the only finding symlog reports; it has no threshold), 2 is invalid input. Codes 3 and 4 are extra and unchanged. SIGINT exits 130: stderr is `onderbroken door SIGINT`, and a one-shot `--output` file is not replaced by a half-written report. `--version` and `-V` exit 0. On a terminal, an error also prints a `hint:` line with the next step already in that error. A pipe, a redirect, or `--quiet` keeps the error line only. `--verbose` prints the hint even on a pipe, and when output was written one `context:` line on stderr (`records`). Plain output on stdout is unchanged. `--quiet` together with `--verbose` is exit 2.
 
 | Code | Meaning |
 |---|---|
@@ -198,12 +198,13 @@ replaces these values with `***`:
 | 2 | usage error: missing required argument, invalid `--level`, the path is a directory, a regular file over 268435456 bytes (256 MiB), or `--quiet` together with `--verbose`. A file over that limit is not read |
 | 3 | `--tui` requested without a tty on stdout |
 | 4 | I/O error while reading that cannot be recovered (including: no read permission), or a failed write of `--output`. A missing parent directory is not created |
+| 130 | SIGINT. No half-written one-shot report. An existing `--output` file stays when the new report was not finished. Stderr is `onderbroken door SIGINT`. Ordinary codes 0, 1, 2, 3 and 4 are unchanged |
 
 ## What it does not do
 
 - No log collection, no server, no network; only a local file at PATH.
 - No stdin input (`-`) in this version.
-- Never writes, rotates or truncates the log file itself. `--output PATH` writes the plain output to that other path and replaces an existing file there. A missing parent directory is not created.
+- Never writes, rotates or truncates the log file itself. `--output PATH` writes the plain output to that other path. A one-shot run replaces an existing file there only after the new report is complete. SIGINT exits 130 and leaves the previous file in place. A missing parent directory is not created.
 - No custom `LineFormatter` format strings; such lines are shown as raw lines.
 - No pretty-printed (multi-line) JSON records.
 - No gzip archives (`*.log.gz`).
@@ -261,14 +262,16 @@ behavior that is actually wired up.
 | Plain output without a tty, filters applied | F1 | `tests/plain_cli.rs::f1_plain_output_matches_golden`, `::level_and_channel_filtered_plain_output_matches_golden` |
 | Empty file: exit 0; missing file: exit 1; directory: exit 2; `--tui` without a tty: exit 3; no read permission: exit 4 | F14 | `tests/startup_cli.rs`, `tests/plain_cli.rs::tui_flag_without_a_tty_exits_three` |
 | A regular file over 268435456 bytes exits 2 and is not read. The measured 100 MiB input stays under this limit | sparse file in `/tmp`, not committed | `tests/input_limit.rs` |
+| SIGINT exits 130 and does not replace an existing `--output` file with a partial report | linux x86_64 | `tests/sigint.rs` |
 | Read-only: no write or network calls | all fixtures | `tests/read_only_proof.rs` |
 | `--help` text | — | `tests/help_golden.rs` |
 | Secrets in plain output and the TUI become `***`; `--no-redact` shows the original | — | `tests/redact.rs` |
 
 ## Development
 
-The suite (`cargo test --no-fail-fast`) has 457 passing tests, 0 failing and 1 ignored,
-measured on this input-limit change (parent `43e4fee`).
+The suite (`cargo test --no-fail-fast`) has 458 passing tests, 0 failing and 1 ignored,
+measured on this SIGINT change (parent `f1aa765`) on linux x86_64. `tests/sigint.rs` is
+built only on that target.
 See `QUALITY.md` for the quality gates.
 
 ```sh

@@ -43,7 +43,7 @@ Forceer de TUI; zonder tty op stdout geeft dit exit 3.
 .TP
 .B --output \fIPATH\fR
 Schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand
-wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt.
+wordt pas vervangen als het nieuwe rapport af is. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt.
 Niet samen met \fB--tui\fR of \fB--completions\fR.
 .TP
 .B --quiet
@@ -81,6 +81,11 @@ of \fB--quiet\fR samen met \fB--verbose\fR.
 I/O-fout bij het lezen die niet te herstellen is (ook: geen leesrechten), een
 mislukte schrijfactie van het completionscript, of een mislukte schrijfactie van
 \fB--output\fR. Een ontbrekende bovenliggende map wordt niet aangemaakt.
+.TP
+.B 130
+SIGINT. Geen half eenmalig rapport. Een bestaand \fB--output\fR-bestand blijft staan
+als het nieuwe rapport niet af was. Stderr is \fIonderbroken door SIGINT\fR.
+De gewone codes 0, 1, 2, 3 en 4 blijven.
 .SH EXAMPLES
 Alle records van een log, plain:
 .PP
