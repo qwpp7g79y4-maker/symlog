@@ -4,7 +4,9 @@ Alle noemenswaardige wijzigingen in dit project staan in dit bestand. Het formaa
 gebaseerd op [Keep a Changelog](https://keepachangelog.com/); dit project gebruikt nog
 geen SemVer-garanties zolang het niet gepubliceerd is.
 
-## Onuitgebracht
+## [1.0.0] — 2026-11-08
+
+Voorstel voor 1.0.0, de opvolger van 0.1.1. Geen tag en niet gepubliceerd.
 
 ### Gewijzigd
 
