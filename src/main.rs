@@ -128,7 +128,7 @@ fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl 
         let _ = writeln!(
             err_out,
             "--tui vereist een terminal op stdout; zonder tty is er alleen --plain \
-             (of de automatische terugval daarop)"
+             (of de automatische terugval daarop); laat --tui weg of start symlog in een echte terminal"
         );
         return startup::EXIT_TUI_REQUIRES_TTY;
     }
@@ -181,7 +181,8 @@ fn run_stdin_mode(opts: &RunOptions, err_out: &mut impl Write, out: &mut impl Wr
     if opts.follow || opts.want_tui {
         let _ = writeln!(
             err_out,
-            "stdin (`-`) werkt alleen als streaming plain-uitvoer; --follow en --tui zijn niet beschikbaar"
+            "stdin (`-`) werkt alleen als streaming plain-uitvoer; --follow en --tui zijn niet beschikbaar; \
+             laat --follow en --tui weg, of geef een bestandspad op in plaats van `-`"
         );
         return startup::EXIT_USAGE;
     }
@@ -198,10 +199,21 @@ fn run_stdin_mode(opts: &RunOptions, err_out: &mut impl Write, out: &mut impl Wr
         // `symlog - | head`: de lezer sloot de pijp, dat is geen fout.
         Err(err) if err.kind() == io::ErrorKind::BrokenPipe => 0,
         Err(err) => {
-            let _ = writeln!(err_out, "stdin: lezen of schrijven mislukt ({err})");
+            let _ = writeln!(err_out, "stdin: lezen of schrijven mislukt ({err}); controleer of de invoerpijp en de uitvoer (schijf of pijp) nog open staan");
             startup::EXIT_IO_ERROR
         }
     }
+}
+
+/// Foutmelding als het uitschrijven van plain-uitvoer faalt. De fout kan van het lezen
+/// van het logbestand komen of van het schrijven naar stdout (schijf vol, gesloten
+/// pijp); de tekst noemt beide en zegt wat je controleert.
+fn flush_failure_message(path: &Path, err: &io::Error) -> String {
+    format!(
+        "{}: lezen of schrijven mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is, \
+         en of de uitvoer (schijf of pijp) nog open staat",
+        path.display()
+    )
 }
 
 /// Plain-uitvoer (task.md T13 "Doet"): dumpt wat er nu al staat, en blijft bij
@@ -239,11 +251,7 @@ fn run_plain_mode(
         follower.finish();
     }
     if let Err(err) = printer.flush(&follower, filter, colors_enabled, out) {
-        let _ = writeln!(
-            err_out,
-            "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-            path.display()
-        );
+        let _ = writeln!(err_out, "{}", flush_failure_message(path, &err));
         if !follow {
             return startup::EXIT_IO_ERROR;
         }
@@ -268,11 +276,7 @@ fn run_plain_mode(
             continue;
         }
         if let Err(err) = printer.flush(&follower, filter, colors_enabled, out) {
-            let _ = writeln!(
-                err_out,
-                "{}: lezen mislukt ({err}); controleer of het bestand nog bestaat en leesbaar is",
-                path.display()
-            );
+            let _ = writeln!(err_out, "{}", flush_failure_message(path, &err));
         }
     }
 }
