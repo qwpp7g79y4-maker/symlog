@@ -40,6 +40,11 @@ Toon geheimen ongemaskeerd. Standaard worden ze vervangen door \fB***\fR.
 .B --tui
 Forceer de TUI; zonder tty op stdout geeft dit exit 3.
 .TP
+.B --output \fIPATH\fR
+Schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand
+wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt.
+Niet samen met \fB--tui\fR of \fB--completions\fR.
+.TP
 .B --completions \fISHELL\fR
 Print een shell-completionscript (bash of zsh) en stop. Mogelijke waarden: bash, zsh.
 Geen pad nodig.
@@ -64,8 +69,9 @@ Gebruiksfout: ontbrekend verplicht argument, ongeldige \fB--level\fR of het pad 
 \fB--tui\fR gevraagd zonder tty op stdout.
 .TP
 .B 4
-I/O-fout bij het lezen die niet te herstellen is (ook: geen leesrechten), of een
-mislukte schrijfactie van het completionscript.
+I/O-fout bij het lezen die niet te herstellen is (ook: geen leesrechten), een
+mislukte schrijfactie van het completionscript, of een mislukte schrijfactie van
+\fB--output\fR. Een ontbrekende bovenliggende map wordt niet aangemaakt.
 .SH EXAMPLES
 Alle records van een log, plain:
 .PP

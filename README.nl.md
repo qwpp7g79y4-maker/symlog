@@ -35,7 +35,7 @@ op dezelfde manier.
 ## Gebruik
 
 ```
-symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui]
+symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui] [--output PATH]
 symlog --completions <bash|zsh>
 ```
 
@@ -92,6 +92,7 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 | `--no-color` | geen kleur, ook op een tty |
 | `--no-redact` | toon geheimen ongemaskeerd; standaard worden ze `***` |
 | `--tui` | forceer de TUI; zonder tty op stdout geeft dit exit 3 |
+| `--output <PATH>` | schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt. Niet samen met `--tui` of `--completions` |
 | `--completions <SHELL>` | print een shell-completionscript (`bash` of `zsh`) en eindig met exit 0; `<PATH>` is dan niet nodig |
 | `-h`, `--help` | help |
 | `-V`, `--version` | versie |
@@ -106,12 +107,12 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 | 1 | pad bestaat niet en `--follow` staat uit |
 | 2 | gebruiksfout: ontbrekend argument, ongeldige `--level`, of het pad is een map |
 | 3 | `--tui` gevraagd zonder tty op stdout |
-| 4 | onherstelbare I/O-fout bij het lezen (ook: geen leesrechten) |
+| 4 | onherstelbare I/O-fout bij het lezen (ook: geen leesrechten), of een mislukte schrijfactie van `--output`. Een ontbrekende bovenliggende map wordt niet aangemaakt |
 
 ## Kwaliteit
 
-446 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
-commit `39e926a`. Zie `QUALITY.md`.
+449 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
+deze `--output`-wijziging (ouder `0e7d545`). Zie `QUALITY.md`.
 
 ## Licentie
 

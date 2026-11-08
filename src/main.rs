@@ -60,6 +60,9 @@ struct Cli {
     /// Forceer de TUI; zonder tty op stdout geeft dit exit 3.
     #[arg(long)]
     tui: bool,
+    /// Schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt.
+    #[arg(long, value_name = "PATH", conflicts_with_all = ["tui", "completions"])]
+    output: Option<PathBuf>,
     /// Print een shell-completionscript (bash of zsh) en stop.
     #[arg(long, value_enum, value_name = "SHELL")]
     completions: Option<CompletionShell>,
@@ -135,19 +138,45 @@ fn main() {
             std::process::exit(startup::EXIT_USAGE);
         }
     };
-    let stdout_is_tty = io::stdout().is_terminal();
+    let to_file = cli.output.is_some();
+    let stdout_is_tty = !to_file && io::stdout().is_terminal();
     let no_color_env_set = std::env::var_os("NO_COLOR").is_some();
     let opts = RunOptions {
         follow: cli.follow,
         want_tui: cli.tui,
-        want_plain: cli.plain,
+        want_plain: cli.plain || to_file,
         stdout_is_tty,
         colors_enabled: plain::colors_enabled(stdout_is_tty, cli.no_color, no_color_env_set),
         redact: !cli.no_redact,
         filter: &filter,
     };
+    if let Some(out_path) = cli.output.as_deref() {
+        match std::fs::File::create(out_path) {
+            Ok(mut file) => {
+                let code = run(path, &opts, &mut io::stderr(), &mut file);
+                if let Err(err) = file.flush() {
+                    eprintln!("{}", output_write_error(out_path, &err));
+                    std::process::exit(startup::EXIT_IO_ERROR);
+                }
+                std::process::exit(code);
+            }
+            Err(err) => {
+                eprintln!("{}", output_write_error(out_path, &err));
+                std::process::exit(startup::EXIT_IO_ERROR);
+            }
+        }
+    }
     let code = run(path, &opts, &mut io::stderr(), &mut io::stdout());
     std::process::exit(code);
+}
+
+/// Fouttekst als `--output` niet geschreven kan worden. Exitcode blijft 4,
+/// dezelfde code als een andere mislukte schrijfactie. De map wordt niet aangemaakt.
+fn output_write_error(path: &Path, err: &io::Error) -> String {
+    format!(
+        "{}: schrijven mislukt ({err}); controleer of de bovenliggende map bestaat en beschrijfbaar is; symlog maakt die map niet aan",
+        path.display()
+    )
 }
 
 /// Bouwt het filter uit `--level`/`--channel` (task.md T13 "Klaar als": `--level error

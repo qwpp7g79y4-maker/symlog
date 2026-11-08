@@ -10,6 +10,7 @@ Werk op tak `prep/w24-fout`, na het 1.0.0-voorstel. Nog niet gepubliceerd.
 
 ### Toegevoegd
 
+- `--output PATH` schrijft de plain-uitvoer naar dat bestand in plaats van stdout. Een bestaand bestand wordt vervangen. Een ontbrekende bovenliggende map is exit 4, dezelfde code als een andere mislukte schrijfactie, en wordt niet aangemaakt. De exitcode van een geslaagde run blijft 0.
 - `--completions <bash|zsh>` print een shell-completionscript, gegenereerd met `clap_complete`; `<PATH>` is dan niet nodig. `man/symlog.1` is de man-pagina bij `--help`; `tests/man_help.rs` houdt ze gelijk.
 - `symlog -` leest stdin in één doorgang en schrijft elk record plain uit zodra het
   compleet is. Er staat hooguit één regel en één record in het geheugen, elk begrensd op

@@ -75,7 +75,7 @@ level range or a channel. The last one reads a JsonFormatter (NDJSON) file the s
 ## Usage
 
 ```
-symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui]
+symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui] [--output PATH]
 symlog --completions <bash|zsh>
 ```
 
@@ -155,6 +155,7 @@ Exact list from `symlog --help` (see `tests/golden/help.txt`):
 | `--no-color` | no color, even on a tty |
 | `--no-redact` | show secrets unmasked; by default they become `***` |
 | `--tui` | force the TUI; without a tty on stdout this exits 3 |
+| `--output <PATH>` | write the plain output to this file instead of stdout. An existing file is replaced. A missing parent directory is an error and is not created. Not together with `--tui` or `--completions` |
 | `--completions <SHELL>` | print a shell completion script (`bash` or `zsh`) and exit 0; `<PATH>` is then not needed |
 | `-h`, `--help` | help |
 | `-V`, `--version` | version |
@@ -194,13 +195,13 @@ replaces these values with `***`:
 | 1 | the path is missing and `--follow` is off: stderr says the path does not exist, code 1. With `--follow` the process waits and the code is not 1 |
 | 2 | usage error: missing required argument, invalid `--level`, or the path is a directory |
 | 3 | `--tui` requested without a tty on stdout |
-| 4 | I/O error while reading that cannot be recovered (including: no read permission) |
+| 4 | I/O error while reading that cannot be recovered (including: no read permission), or a failed write of `--output`. A missing parent directory is not created |
 
 ## What it does not do
 
 - No log collection, no server, no network; only a local file at PATH.
 - No stdin input (`-`) in this version.
-- Never writes, rotates or truncates a log file itself.
+- Never writes, rotates or truncates the log file itself. `--output PATH` writes the plain output to that other path and replaces an existing file there. A missing parent directory is not created.
 - No custom `LineFormatter` format strings; such lines are shown as raw lines.
 - No pretty-printed (multi-line) JSON records.
 - No gzip archives (`*.log.gz`).
@@ -263,8 +264,8 @@ behavior that is actually wired up.
 
 ## Development
 
-The suite (`cargo test --no-fail-fast`) has 446 passing tests, 0 failing and 1 ignored,
-measured on commit `39e926a`.
+The suite (`cargo test --no-fail-fast`) has 449 passing tests, 0 failing and 1 ignored,
+measured on this `--output` change (parent `0e7d545`).
 See `QUALITY.md` for the quality gates.
 
 ```sh
