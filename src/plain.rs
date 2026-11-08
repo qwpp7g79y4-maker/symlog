@@ -30,7 +30,7 @@ use crate::filter::FilterSpec;
 use crate::follow::{Follower, Separator, SeparatorKind};
 use crate::model::{Frame, Level, Record};
 use crate::parse::raw::ParsedRecord;
-use std::io::{self, Write};
+use std::io::{self, BufRead, Write};
 
 /// ANSI SGR-kleurcode per niveau (task.md T13 "Doet": "kleur alleen bij TTY en zonder
 /// `NO_COLOR`"). Dezelfde achtliggende paletkeuze als [`crate::tui::view`]'s
@@ -201,6 +201,118 @@ impl PlainPrinter {
     }
 }
 
+/// Bovengrens (bytes) voor één regel én voor één record in de streaming-modus. Alles
+/// daarboven wordt weggegooid (de rest van de regel/het record wordt nog wel gelezen
+/// en gescand), zodat het geheugengebruik begrensd blijft, ook bij een invoer zonder
+/// één recordkop of zonder één `\n`.
+pub const STREAM_MAX_RECORD_BYTES: usize = 16 * 1024 * 1024;
+
+/// Streaming-plain voor stdin (W-05): leest `input` in één doorgang en schrijft elk
+/// record zodra het compleet is, zonder het geheel in het geheugen te houden. Er staat
+/// op elk moment hooguit één regel en één record in het geheugen (elk begrensd door
+/// [`STREAM_MAX_RECORD_BYTES`]). Recordgrenzen en weergave zijn dezelfde als in de
+/// bestandsroute (`is_record_header`, [`parse_record_lossy`], [`render_line_with`]);
+/// een staartregel zonder afsluitende `\n` wordt aan het einde alsnog afgedrukt.
+///
+/// Geeft het aantal gelezen records terug (ook die het filter wegliet).
+pub fn stream_plain<R: BufRead, W: Write>(
+    input: R,
+    spec: &FilterSpec,
+    colors_enabled: bool,
+    redact: bool,
+    out: W,
+) -> io::Result<u64> {
+    stream_plain_with_limit(
+        input,
+        spec,
+        colors_enabled,
+        redact,
+        out,
+        STREAM_MAX_RECORD_BYTES,
+    )
+}
+
+fn stream_plain_with_limit<R: BufRead, W: Write>(
+    mut input: R,
+    spec: &FilterSpec,
+    colors_enabled: bool,
+    redact: bool,
+    mut out: W,
+    max_bytes: usize,
+) -> io::Result<u64> {
+    let mut record: Vec<u8> = Vec::new();
+    let mut line: Vec<u8> = Vec::new();
+    let mut count = 0u64;
+    let mut seen_line = false;
+    let mut drained = true;
+
+    let mut emit = |record: &mut Vec<u8>, drained: bool, out: &mut W| -> io::Result<()> {
+        if record.is_empty() {
+            return Ok(());
+        }
+        let parsed = crate::parse::parse_record_lossy(record);
+        if spec.matches_parsed(&parsed) {
+            writeln!(out, "{}", render_line_with(&parsed, colors_enabled, redact))?;
+        }
+        record.clear();
+        count += 1;
+        // Geen vertraging voor een langzame producent: leeg de uitvoer zodra er niets
+        // meer in de invoerbuffer wacht.
+        if drained {
+            out.flush()?;
+        }
+        Ok(())
+    };
+
+    loop {
+        // Eén volledige regel (inclusief `\n`) lezen; bewaar hooguit `max_bytes`.
+        line.clear();
+        let mut ended_with_newline = false;
+        let mut got_any = false;
+        let mut truncated = false;
+        loop {
+            let buf = input.fill_buf()?;
+            if buf.is_empty() {
+                break;
+            }
+            got_any = true;
+            let (chunk, found) = match memchr::memchr(b'\n', buf) {
+                Some(i) => (&buf[..=i], true),
+                None => (buf, false),
+            };
+            let room = max_bytes.saturating_sub(line.len());
+            if chunk.len() > room {
+                truncated = true;
+            }
+            line.extend_from_slice(&chunk[..chunk.len().min(room)]);
+            let used = chunk.len();
+            drained = used == buf.len();
+            input.consume(used);
+            if found {
+                ended_with_newline = true;
+                break;
+            }
+        }
+        if !got_any {
+            break;
+        }
+        let content = if ended_with_newline && line.last() == Some(&b'\n') && !truncated {
+            &line[..line.len() - 1]
+        } else {
+            &line[..]
+        };
+        if seen_line && crate::parse::is_record_header(content) {
+            emit(&mut record, drained, &mut out)?;
+        }
+        seen_line = true;
+        let room = max_bytes.saturating_sub(record.len());
+        record.extend_from_slice(&line[..line.len().min(room)]);
+    }
+    emit(&mut record, drained, &mut out)?;
+    out.flush()?;
+    Ok(count)
+}
+
 fn due(separator: &Separator, next_record: usize) -> bool {
     separator.before_record <= next_record
 }
@@ -233,6 +345,87 @@ mod tests {
             extra: serde_json::json!([]),
             frames,
         }
+    }
+
+    fn no_filter() -> FilterSpec {
+        FilterSpec {
+            channels: ChannelFilter::from_specs(Vec::<String>::new()),
+            levels: None,
+            search: None,
+        }
+    }
+
+    fn stream_to_string(input: &[u8], max_bytes: usize) -> (String, u64) {
+        let mut out = Vec::new();
+        let n =
+            stream_plain_with_limit(input, &no_filter(), false, true, &mut out, max_bytes).unwrap();
+        (String::from_utf8(out).unwrap(), n)
+    }
+
+    #[test]
+    fn stream_empty_input_prints_nothing() {
+        assert_eq!(stream_to_string(b"", 1024), (String::new(), 0));
+    }
+
+    #[test]
+    fn stream_groups_continuation_lines_and_prints_unterminated_tail() {
+        let input = b"[2026-01-15T10:00:00.000000+01:00] app.INFO: one\nextra [] []\n\
+[2026-01-15T10:00:01.000000+01:00] app.ERROR: two [] []";
+        let (text, n) = stream_to_string(input, 1024);
+        assert_eq!(n, 2);
+        assert_eq!(
+            text,
+            "[2026-01-15T10:00:00.000000+01:00] app.INFO: one\n\
+[2026-01-15T10:00:01.000000+01:00] app.ERROR: two\n"
+        );
+    }
+
+    #[test]
+    fn stream_matches_the_file_route_on_the_same_bytes() {
+        let mut input = Vec::new();
+        for i in 0..50 {
+            let level = if i % 3 == 0 { "ERROR" } else { "INFO" };
+            input.extend_from_slice(
+                format!("[2026-01-15T10:00:{i:02}.000000+01:00] app.{level}: m{i} [] []\r\ncont {i}\r\n")
+                    .as_bytes(),
+            );
+        }
+        input.extend_from_slice(b"garbage without header at end");
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("a.log");
+        fs::write(&path, &input).unwrap();
+
+        let mut follower = Follower::open(&path);
+        follower.tick().unwrap();
+        follower.finish();
+        let mut expected = Vec::new();
+        PlainPrinter::new()
+            .flush(&follower, &no_filter(), false, &mut expected)
+            .unwrap();
+
+        let (text, _) = stream_to_string(&input, STREAM_MAX_RECORD_BYTES);
+        assert_eq!(text.as_bytes(), &expected[..]);
+    }
+
+    #[test]
+    fn stream_bounds_memory_for_input_without_headers_or_newlines() {
+        // Een enorme regel zonder `\n` en zonder kop: wordt afgekapt, geen paniek.
+        let input = vec![b'x'; 100_000];
+        let (text, n) = stream_to_string(&input, 1000);
+        assert_eq!(n, 1);
+        assert!(text.len() < 1100, "uitvoer niet begrensd: {}", text.len());
+    }
+
+    #[test]
+    fn stream_truncated_record_still_splits_at_the_next_header() {
+        let mut input = b"[2026-01-15T10:00:00.000000+01:00] app.INFO: big [] []\n".to_vec();
+        for _ in 0..100 {
+            input.extend_from_slice(b"continuation continuation continuation\n");
+        }
+        input.extend_from_slice(b"[2026-01-15T10:00:01.000000+01:00] app.INFO: next [] []\n");
+        let (text, n) = stream_to_string(&input, 200);
+        assert_eq!(n, 2);
+        assert!(text.ends_with("app.INFO: next\n"), "{text}");
     }
 
     #[test]

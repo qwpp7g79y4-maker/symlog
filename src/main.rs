@@ -7,8 +7,8 @@
 //! `--format`, `--grep`, `--tz`, `--map`, `--server`, `--editor` en `--config` uit
 //! task.md's CLI-schets zijn hier nog niet aangesloten: T13 vraagt zelf alleen om de
 //! moduskeuze en plain-uitvoer, met filters beperkt tot wat de "Klaar als"-tests nodig
-//! hebben (`--level`, `--channel`). Stdin (`-`) is ook nog niet aangesloten: dat vraagt
-//! stdin-steun in [`symlog::reader`] die er nog niet is.
+//! hebben (`--level`, `--channel`). Stdin (`-`) loopt via [`symlog::plain::stream_plain`]
+//! (W-05), los van [`symlog::reader`].
 
 use clap::Parser;
 use ratatui::backend::CrosstermBackend;
@@ -34,7 +34,8 @@ type CrosstermTerminal = Terminal<CrosstermBackend<io::Stdout>>;
 #[derive(Parser)]
 #[command(name = "symlog", version)]
 struct Cli {
-    /// Pad naar het logbestand.
+    /// Pad naar het logbestand, of `-` om van stdin te lezen (streaming, alleen plain;
+    /// de invoer wordt niet in het geheugen verzameld).
     path: PathBuf,
     /// Blijf het bestand volgen (`tail -f`), ook als het nog niet bestaat.
     #[arg(short = 'f', long)]
@@ -132,6 +133,10 @@ fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl 
         return startup::EXIT_TUI_REQUIRES_TTY;
     }
 
+    if path == Path::new("-") {
+        return run_stdin_mode(opts, err_out, out);
+    }
+
     let classification = startup::classify(path);
     let classification = if opts.follow {
         match classification {
@@ -164,6 +169,37 @@ fn run(path: &Path, opts: &RunOptions, err_out: &mut impl Write, out: &mut impl 
             } else {
                 run_tui_mode(path, opts.follow, opts.filter, opts.redact)
             }
+        }
+    }
+}
+
+/// Stdin-streaming (W-05): `symlog -` leest stdin in één doorgang en schrijft elk
+/// record plain uit zodra het compleet is ([`plain::stream_plain`]). Stdin is niet
+/// terug te spoelen en niet te volgen, dus `--follow` en `--tui` zijn hier een
+/// gebruiksfout (exit 2).
+fn run_stdin_mode(opts: &RunOptions, err_out: &mut impl Write, out: &mut impl Write) -> i32 {
+    if opts.follow || opts.want_tui {
+        let _ = writeln!(
+            err_out,
+            "stdin (`-`) werkt alleen als streaming plain-uitvoer; --follow en --tui zijn niet beschikbaar"
+        );
+        return startup::EXIT_USAGE;
+    }
+    let stdin = io::stdin();
+    let writer = io::BufWriter::with_capacity(64 * 1024, out);
+    match plain::stream_plain(
+        stdin.lock(),
+        opts.filter,
+        opts.colors_enabled,
+        opts.redact,
+        writer,
+    ) {
+        Ok(_) => 0,
+        // `symlog - | head`: de lezer sloot de pijp, dat is geen fout.
+        Err(err) if err.kind() == io::ErrorKind::BrokenPipe => 0,
+        Err(err) => {
+            let _ = writeln!(err_out, "stdin: lezen of schrijven mislukt ({err})");
+            startup::EXIT_IO_ERROR
         }
     }
 }
