@@ -6,7 +6,7 @@ geen SemVer-garanties zolang het niet gepubliceerd is.
 
 ## [Unreleased]
 
-Werk op tak `prep/w05-stream`, na het 1.0.0-voorstel. Nog niet gepubliceerd.
+Werk op tak `prep/w24-fout`, na het 1.0.0-voorstel. Nog niet gepubliceerd.
 
 ### Toegevoegd
 
