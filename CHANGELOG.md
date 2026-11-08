@@ -10,6 +10,7 @@ Werk op tak `prep/w05-stream`, na het 1.0.0-voorstel. Nog niet gepubliceerd.
 
 ### Toegevoegd
 
+- `--completions <bash|zsh>` print een shell-completionscript, gegenereerd met `clap_complete`; `<PATH>` is dan niet nodig. `man/symlog.1` is de man-pagina bij `--help`; `tests/man_help.rs` houdt ze gelijk.
 - `symlog -` leest stdin in één doorgang en schrijft elk record plain uit zodra het
   compleet is. Er staat hooguit één regel en één record in het geheugen, elk begrensd op
   16 MiB. Een test streamt 1 GiB door de binary en controleert dat het piekgeheugen

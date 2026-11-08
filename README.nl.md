@@ -35,7 +35,8 @@ op dezelfde manier.
 ## Gebruik
 
 ```
-symlog <PATH> [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui]
+symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui]
+symlog --completions <bash|zsh>
 ```
 
 `<PATH>` is verplicht; er is geen automatisch `var/log/...`-pad en geen stdin (`-`).
@@ -83,7 +84,7 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 
 | Optie | Doet |
 |---|---|
-| `<PATH>` | pad naar het logbestand (verplicht) |
+| `[PATH]` | pad naar het logbestand (verplicht, behalve met `--completions`) |
 | `-f`, `--follow` | zonder tty: ontbreekt het pad, dan komt `wacht op <pad>...` op stderr en blijft het proces wachten (geen exit 1). Verschijnt het bestand, dan gaan records naar stdout en blijft het proces draaien. Een leeg bestand geeft geen uitvoer en stopt niet; een later binnenkomende regel verschijnt alsnog |
 | `--level <LEVEL>` | niveaufilter: een lijst (`error,critical`) of een ondergrens (`>=warning`) |
 | `--channel <CHANNELS>` | kanaalfilter, herhaalbaar; `!kanaal` sluit dat kanaal uit |
@@ -91,6 +92,7 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 | `--no-color` | geen kleur, ook op een tty |
 | `--no-redact` | toon geheimen ongemaskeerd; standaard worden ze `***` |
 | `--tui` | forceer de TUI; zonder tty op stdout geeft dit exit 3 |
+| `--completions <SHELL>` | print een shell-completionscript (`bash` of `zsh`) en eindig met exit 0; `<PATH>` is dan niet nodig |
 | `-h`, `--help` | help |
 | `-V`, `--version` | versie |
 

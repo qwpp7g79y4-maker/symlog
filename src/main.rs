@@ -10,7 +10,8 @@
 //! hebben (`--level`, `--channel`). Stdin (`-`) loopt via [`symlog::plain::stream_plain`]
 //! (W-05), los van [`symlog::reader`].
 
-use clap::Parser;
+use clap::{CommandFactory, Parser, ValueEnum};
+use clap_complete::{generate, Shell};
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{self, Event};
 use ratatui::crossterm::execute;
@@ -36,7 +37,8 @@ type CrosstermTerminal = Terminal<CrosstermBackend<io::Stdout>>;
 struct Cli {
     /// Pad naar het logbestand, of `-` om van stdin te lezen (streaming, alleen plain;
     /// de invoer wordt niet in het geheugen verzameld).
-    path: PathBuf,
+    #[arg(required_unless_present = "completions")]
+    path: Option<PathBuf>,
     /// Blijf het bestand volgen (`tail -f`), ook als het nog niet bestaat.
     #[arg(short = 'f', long)]
     follow: bool,
@@ -58,6 +60,48 @@ struct Cli {
     /// Forceer de TUI; zonder tty op stdout geeft dit exit 3.
     #[arg(long)]
     tui: bool,
+    /// Print een shell-completionscript (bash of zsh) en stop.
+    #[arg(long, value_enum, value_name = "SHELL")]
+    completions: Option<CompletionShell>,
+}
+
+/// Shells waarvoor `--completions` een script kan printen.
+#[derive(Clone, Copy, ValueEnum)]
+enum CompletionShell {
+    Bash,
+    Zsh,
+}
+
+impl From<CompletionShell> for Shell {
+    fn from(shell: CompletionShell) -> Self {
+        match shell {
+            CompletionShell::Bash => Shell::Bash,
+            CompletionShell::Zsh => Shell::Zsh,
+        }
+    }
+}
+
+/// Schrijft het completionscript naar stdout. Een mislukte schrijfactie geeft
+/// exit 4 en een melding, geen paniek.
+fn print_completions(shell: CompletionShell) -> i32 {
+    let mut script = Vec::new();
+    generate(
+        Shell::from(shell),
+        &mut Cli::command(),
+        "symlog",
+        &mut script,
+    );
+    let mut stdout = io::stdout().lock();
+    match stdout.write_all(&script).and_then(|()| stdout.flush()) {
+        Ok(()) => 0,
+        Err(err) => {
+            let _ = writeln!(
+                io::stderr(),
+                "kan het completionscript niet schrijven: {err}\n  tip: controleer of stdout nog open staat en schijfruimte heeft, of schrijf naar een bestand"
+            );
+            startup::EXIT_IO_ERROR
+        }
+    }
 }
 
 /// CLI-brede opties voor [`run`], gebundeld zodat de functiehandtekening niet aan
@@ -76,6 +120,14 @@ struct RunOptions<'a> {
 
 fn main() {
     let cli = Cli::parse();
+    if let Some(shell) = cli.completions {
+        std::process::exit(print_completions(shell));
+    }
+    let Some(path) = cli.path.as_deref() else {
+        // `required_unless_present` laat dit niet toe; dit is alleen een vangnet.
+        eprintln!("het pad naar het logbestand ontbreekt\n  tip: geef een pad of `-` mee, zie `symlog --help`");
+        std::process::exit(startup::EXIT_USAGE);
+    };
     let filter = match build_filter(cli.level.as_deref(), &cli.channels) {
         Ok(filter) => filter,
         Err(message) => {
@@ -94,7 +146,7 @@ fn main() {
         redact: !cli.no_redact,
         filter: &filter,
     };
-    let code = run(&cli.path, &opts, &mut io::stderr(), &mut io::stdout());
+    let code = run(path, &opts, &mut io::stderr(), &mut io::stdout());
     std::process::exit(code);
 }
 

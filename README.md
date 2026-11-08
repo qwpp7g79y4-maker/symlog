@@ -75,7 +75,8 @@ level range or a channel. The last one reads a JsonFormatter (NDJSON) file the s
 ## Usage
 
 ```
-symlog <PATH> [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui]
+symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui]
+symlog --completions <bash|zsh>
 ```
 
 `<PATH>` is required; there is no automatic `var/log/...` default and no stdin
@@ -146,7 +147,7 @@ Exact list from `symlog --help` (see `tests/golden/help.txt`):
 
 | Flag | Does |
 |---|---|
-| `<PATH>` | path to the log file (required) |
+| `[PATH]` | path to the log file (required, except with `--completions`) |
 | `-f`, `--follow` | without a tty: if the path is missing, `wacht op <pad>...` is printed on stderr and the process keeps waiting (not exit 1). When the file appears, records go to stdout and the process keeps running. An empty file produces no output and does not stop; a line that arrives later still appears |
 | `--level <LEVEL>` | level filter: a list (`error,critical`) or a lower bound (`>=warning`) |
 | `--channel <CHANNELS>` | channel filter, repeatable; `!channel` excludes that channel |
@@ -154,6 +155,7 @@ Exact list from `symlog --help` (see `tests/golden/help.txt`):
 | `--no-color` | no color, even on a tty |
 | `--no-redact` | show secrets unmasked; by default they become `***` |
 | `--tui` | force the TUI; without a tty on stdout this exits 3 |
+| `--completions <SHELL>` | print a shell completion script (`bash` or `zsh`) and exit 0; `<PATH>` is then not needed |
 | `-h`, `--help` | help |
 | `-V`, `--version` | version |
 
