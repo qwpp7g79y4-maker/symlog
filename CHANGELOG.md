@@ -4,6 +4,22 @@ Alle noemenswaardige wijzigingen in dit project staan in dit bestand. Het formaa
 gebaseerd op [Keep a Changelog](https://keepachangelog.com/); dit project gebruikt nog
 geen SemVer-garanties zolang het niet gepubliceerd is.
 
+## [Unreleased]
+
+Werk op tak `prep/w05-stream`, na het 1.0.0-voorstel. Nog niet gepubliceerd.
+
+### Toegevoegd
+
+- `symlog -` leest stdin in één doorgang en schrijft elk record plain uit zodra het
+  compleet is. Er staat hooguit één regel en één record in het geheugen, elk begrensd op
+  16 MiB. Een test streamt 1 GiB door de binary en controleert dat het piekgeheugen
+  onder 128 MiB blijft.
+
+### Gewijzigd
+
+- `--follow` of `--tui` samen met stdin (`-`) is een gebruiksfout (exit 2). Een
+  afgesloten pijp (`symlog - | head`) geeft exit 0. De hulptekst van `<PATH>` noemt `-`.
+
 ## [1.0.0] — 2026-11-08
 
 Voorstel voor 1.0.0, de opvolger van 0.1.1. Geen tag en niet gepubliceerd.
@@ -22,7 +38,7 @@ Voorstel voor 1.0.0, de opvolger van 0.1.1. Geen tag en niet gepubliceerd.
 - `QUALITY.md` met de kwaliteitspoorten en het huidige testaantal (427 geslaagd,
   0 gefaald, 1 genegeerd); `README.md` noemt hetzelfde aantal.
 
-## 0.1.1 — 2026-10-25
+## [0.1.1] — 2026-10-25
 
 ### Opgelost
 
@@ -39,7 +55,7 @@ Voorstel voor 1.0.0, de opvolger van 0.1.1. Geen tag en niet gepubliceerd.
   quoted waarde kon de redactie van die waarde omzeilen; die tekens worden nu net
   als andere format-tekens overgeslagen.
 
-## 0.1.0 — eerste lokale versie
+## [0.1.0] — 2026-10-24
 
 Eerste werkende versie van `symlog`: een read-only terminal-logviewer voor
 Symfony/Monolog-logs.
