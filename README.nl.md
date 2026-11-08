@@ -110,8 +110,8 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 
 ## Kwaliteit
 
-437 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
-commit `f5ab1a4` plus de quickstart-tests. Zie `QUALITY.md`.
+446 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
+commit `39e926a`. Zie `QUALITY.md`.
 
 ## Licentie
 

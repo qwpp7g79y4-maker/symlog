@@ -263,8 +263,8 @@ behavior that is actually wired up.
 
 ## Development
 
-The suite (`cargo test --no-fail-fast`) has 437 passing tests, 0 failing and 1 ignored,
-measured on commit `f5ab1a4` plus the quickstart tests.
+The suite (`cargo test --no-fail-fast`) has 446 passing tests, 0 failing and 1 ignored,
+measured on commit `39e926a`.
 See `QUALITY.md` for the quality gates.
 
 ```sh
