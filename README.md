@@ -24,7 +24,7 @@ prints are Dutch (`wacht op <pad>...`, `— geroteerd —`, `— afgekapt —`).
   instead of crashing; ANSI escapes and NUL bytes in the log text are neutralized
   before display.
 - Filters by channel (`--channel`, repeatable; `!channel` excludes) and by level
-  (`--level error,critical` or `--level >=warning`); in the TUI also interactively
+  (`--level error,critical` or `--level error,critical`); in the TUI also interactively
   with the keys `c` and `l`.
 - In the TUI: `/` searches message and context with a regular expression and jumps
   to the next or previous match (`n`/`N`).
@@ -54,6 +54,23 @@ cargo install --git https://github.com/qwpp7g79y4-maker/symlog
 ```
 
 Or from a local checkout: `cargo install --path .`
+
+## Aan de slag in 5 minuten
+
+Run these from a checkout of this repository (they use the fixtures in `tests/fixtures`;
+no system logs, no network, no TUI). `tests/quickstart_readme.rs` runs every `symlog`
+line below literally.
+
+```sh
+symlog tests/fixtures/line-basic.log --plain --no-color
+symlog tests/fixtures/line-basic.log --plain --no-color --level error
+symlog tests/fixtures/line-basic.log --plain --no-color --level error,critical
+symlog tests/fixtures/line-basic.log --plain --no-color --channel request
+symlog tests/fixtures/json-basic.ndjson --plain --no-color
+```
+
+The first line prints every record, one per line. The next ones keep only a level, a
+level range or a channel. The last one reads a JsonFormatter (NDJSON) file the same way.
 
 ## Usage
 
@@ -242,8 +259,8 @@ behavior that is actually wired up.
 
 ## Development
 
-The suite (`cargo test --no-fail-fast`) has 427 passing tests, 0 failing and 1 ignored,
-measured on commit `495d2b1`.
+The suite (`cargo test --no-fail-fast`) has 437 passing tests, 0 failing and 1 ignored,
+measured on commit `f5ab1a4` plus the quickstart tests.
 See `QUALITY.md` for the quality gates.
 
 ```sh

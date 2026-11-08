@@ -14,6 +14,24 @@ cargo install --git https://github.com/qwpp7g79y4-maker/symlog
 
 Of vanuit een lokale checkout: `cargo install --path .`
 
+## Aan de slag in 5 minuten
+
+Voer dit uit vanuit een checkout van deze repository (met de fixtures in
+`tests/fixtures`; geen systeemlogs, geen netwerk, geen TUI). `tests/quickstart_readme.rs`
+draait elke `symlog`-regel hieronder letterlijk.
+
+```sh
+symlog tests/fixtures/line-basic.log --plain --no-color
+symlog tests/fixtures/line-basic.log --plain --no-color --level error
+symlog tests/fixtures/line-basic.log --plain --no-color --level error,critical
+symlog tests/fixtures/line-basic.log --plain --no-color --channel request
+symlog tests/fixtures/json-basic.ndjson --plain --no-color
+```
+
+De eerste regel toont alle records, één per regel. De volgende houden alleen een level,
+een lijst levels of een kanaal over. De laatste leest een JsonFormatter-bestand (NDJSON)
+op dezelfde manier.
+
 ## Gebruik
 
 ```
@@ -88,8 +106,8 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 
 ## Kwaliteit
 
-427 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
-commit `495d2b1`. Zie `QUALITY.md`.
+437 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
+commit `f5ab1a4` plus de quickstart-tests. Zie `QUALITY.md`.
 
 ## Licentie
 
