@@ -96,6 +96,8 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 
 ## Exitcodes
 
+0 is geslaagd, 1 is een ontbrekend pad (de enige bevinding die symlog meldt; er is geen drempel), 2 is ongeldige invoer. Code 3 en 4 zijn extra en ongewijzigd. `--version` en `-V` geven exit 0.
+
 | Code | Betekenis |
 |---|---|
 | 0 | normaal afgesloten (een leeg bestand zonder `--follow` geeft niets en exit 0) |

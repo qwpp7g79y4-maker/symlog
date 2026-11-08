@@ -184,6 +184,8 @@ replaces these values with `***`:
 
 ## Exit codes
 
+0 is success, 1 is a missing path (the only finding symlog reports; it has no threshold), 2 is invalid input. Codes 3 and 4 are extra and unchanged. `--version` and `-V` exit 0.
+
 | Code | Meaning |
 |---|---|
 | 0 | exited normally. An empty file without `--follow` exits 0 and prints nothing. With `--follow`, an empty file does not exit by itself |
