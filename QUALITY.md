@@ -3,10 +3,17 @@
 Gates for this branch, measured with `cargo test --no-fail-fast`,
 `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`:
 
-- Tests: 458 passed, 0 failed, 1 ignored (sum over all test binaries), measured on
-  this SIGINT change (parent `f1aa765`) on linux x86_64. `tests/sigint.rs` is built
+- Tests: 462 passed, 0 failed, 1 ignored (sum over all test binaries), measured on
+  this version change (parent `ae22844`) on linux x86_64. `tests/sigint.rs` is built
   only on that target. The 100 MiB row and the line-coverage row stay the earlier
   measurement.
+
+## Version (2026-11-08, W-66, branch prep/w24-fout)
+
+- `--version` and `-V` print `symlog 1.0.0` and exit 0. A debug build also prints the git sha when git itself printed one at build time. A release build prints the version only. Flag names stay the same. No new exit code. `tests/version_cli.rs` runs both flags on the built binary. `src/main.rs` tests that a release version string omits the sha.
+- `cargo test --no-fail-fast`: 462 passed / 0 failed / 1 ignored.
+- `cargo fmt --check`: clean. `cargo clippy --all-targets -- -D warnings`: clean.
+- Version stays 1.0.0. `rust-version` stays 1.88.
 
 ## SIGINT (2026-11-08, W-48, branch prep/w24-fout)
 

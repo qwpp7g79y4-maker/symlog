@@ -189,7 +189,7 @@ replaces these values with `***`:
 
 ## Exit codes
 
-0 is success, 1 is a missing path (the only finding symlog reports; it has no threshold), 2 is invalid input. Codes 3 and 4 are extra and unchanged. SIGINT exits 130: stderr is `onderbroken door SIGINT`, and a one-shot `--output` file is not replaced by a half-written report. `--version` and `-V` exit 0. On a terminal, an error also prints a `hint:` line with the next step already in that error. A pipe, a redirect, or `--quiet` keeps the error line only. `--verbose` prints the hint even on a pipe, and when output was written one `context:` line on stderr (`records`). Plain output on stdout is unchanged. `--quiet` together with `--verbose` is exit 2.
+0 is success, 1 is a missing path (the only finding symlog reports; it has no threshold), 2 is invalid input. Codes 3 and 4 are extra and unchanged. SIGINT exits 130: stderr is `onderbroken door SIGINT`, and a one-shot `--output` file is not replaced by a half-written report. `--version` and `-V` print `symlog 1.0.0` and exit 0. A debug build also prints the git sha when the build got it from git itself. A release build does not print that sha. On a terminal, an error also prints a `hint:` line with the next step already in that error. A pipe, a redirect, or `--quiet` keeps the error line only. `--verbose` prints the hint even on a pipe, and when output was written one `context:` line on stderr (`records`). Plain output on stdout is unchanged. `--quiet` together with `--verbose` is exit 2.
 
 | Code | Meaning |
 |---|---|
@@ -265,12 +265,13 @@ behavior that is actually wired up.
 | SIGINT exits 130 and does not replace an existing `--output` file with a partial report | linux x86_64 | `tests/sigint.rs` |
 | Read-only: no write or network calls | all fixtures | `tests/read_only_proof.rs` |
 | `--help` text | — | `tests/help_golden.rs` |
+| `--version` and `-V` print `symlog 1.0.0` and exit 0. A debug build also prints the git sha when git itself provided it. A release build does not | — | `tests/version_cli.rs`, `src/main.rs::tests::release_version_omits_the_sha` |
 | Secrets in plain output and the TUI become `***`; `--no-redact` shows the original | — | `tests/redact.rs` |
 
 ## Development
 
-The suite (`cargo test --no-fail-fast`) has 458 passing tests, 0 failing and 1 ignored,
-measured on this SIGINT change (parent `f1aa765`) on linux x86_64. `tests/sigint.rs` is
+The suite (`cargo test --no-fail-fast`) has 462 passing tests, 0 failing and 1 ignored,
+measured on this version change (parent `ae22844`) on linux x86_64. `tests/sigint.rs` is
 built only on that target.
 See `QUALITY.md` for the quality gates.
 

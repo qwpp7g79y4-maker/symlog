@@ -101,7 +101,7 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 
 ## Exitcodes
 
-0 is geslaagd, 1 is een ontbrekend pad (de enige bevinding die symlog meldt; er is geen drempel), 2 is ongeldige invoer. Code 3 en 4 zijn extra en ongewijzigd. SIGINT eindigt met exit 130: stderr is `onderbroken door SIGINT`, en een eenmalig `--output`-bestand wordt niet vervangen door een half rapport. `--version` en `-V` geven exit 0. Op een terminal print een fout ook een `hint:`-regel met de vervolgstap die al in die fout staat. Een pipe, een redirect of `--quiet` houdt alleen de foutregel. `--verbose` toont de hint ook bij een pipe, en als de uitvoer geschreven is één `context:`-regel op stderr (`records`). De plain-uitvoer op stdout blijft gelijk. `--quiet` samen met `--verbose` is exit 2.
+0 is geslaagd, 1 is een ontbrekend pad (de enige bevinding die symlog meldt; er is geen drempel), 2 is ongeldige invoer. Code 3 en 4 zijn extra en ongewijzigd. SIGINT eindigt met exit 130: stderr is `onderbroken door SIGINT`, en een eenmalig `--output`-bestand wordt niet vervangen door een half rapport. `--version` en `-V` tonen `symlog 1.0.0` en geven exit 0. Een debug-build toont daarachter de git-sha, alleen als git die bij de build zelf geeft. Een release-build toont die sha niet. Op een terminal print een fout ook een `hint:`-regel met de vervolgstap die al in die fout staat. Een pipe, een redirect of `--quiet` houdt alleen de foutregel. `--verbose` toont de hint ook bij een pipe, en als de uitvoer geschreven is één `context:`-regel op stderr (`records`). De plain-uitvoer op stdout blijft gelijk. `--quiet` samen met `--verbose` is exit 2.
 
 | Code | Betekenis |
 |---|---|
@@ -114,8 +114,8 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 
 ## Kwaliteit
 
-458 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
-deze SIGINT-wijziging (ouder `f1aa765`) op linux x86_64. `tests/sigint.rs` wordt alleen
+462 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
+deze versiewijziging (ouder `ae22844`) op linux x86_64. `tests/sigint.rs` wordt alleen
 op dat doel gebouwd. Zie `QUALITY.md`.
 
 ## Licentie

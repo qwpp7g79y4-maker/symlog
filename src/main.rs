@@ -12,7 +12,7 @@
 
 mod interrupt;
 
-use clap::{CommandFactory, Parser, ValueEnum};
+use clap::{CommandFactory, FromArgMatches, Parser, ValueEnum};
 use clap_complete::{generate, Shell};
 use ratatui::backend::CrosstermBackend;
 use ratatui::crossterm::event::{self, Event};
@@ -36,7 +36,7 @@ use symlog::tui::{self, keys, view, App};
 type CrosstermTerminal = Terminal<CrosstermBackend<io::Stdout>>;
 
 #[derive(Parser)]
-#[command(name = "symlog", version)]
+#[command(name = "symlog")]
 struct Cli {
     /// Pad naar het logbestand, of `-` om van stdin te lezen (streaming, alleen plain;
     /// de invoer wordt niet in het geheugen verzameld).
@@ -99,7 +99,7 @@ fn print_completions(shell: CompletionShell, extra: bool) -> i32 {
     let mut script = Vec::new();
     generate(
         Shell::from(shell),
-        &mut Cli::command(),
+        &mut cli_command(),
         "symlog",
         &mut script,
     );
@@ -191,9 +191,55 @@ fn emit_context(err_out: &mut impl Write, records: impl std::fmt::Display, verbo
     }
 }
 
+/// `--version` en `-V`. De crate-versie altijd. In een debug-build ook de
+/// git-sha, alleen als de build die van git kreeg. Een release-build niet.
+fn cli_version() -> &'static str {
+    static VERSION: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    VERSION
+        .get_or_init(|| {
+            format_cli_version(
+                env!("CARGO_PKG_VERSION"),
+                option_env!("SYMLOG_GIT_SHA"),
+                cfg!(debug_assertions),
+            )
+        })
+        .as_str()
+}
+
+/// `debug` toont `sha` alleen als het een objectnaam is zoals `git rev-parse`
+/// die print. Andere tekst, en elke release-build, blijft bij de crate-versie.
+fn format_cli_version(crate_version: &str, sha: Option<&str>, debug: bool) -> String {
+    if debug {
+        if let Some(sha) = sha.filter(|candidate| is_git_object_name(candidate)) {
+            return format!("{crate_version} {sha}");
+        }
+    }
+    crate_version.to_string()
+}
+
+/// 40 (SHA-1) of 64 (SHA-256) kleine hex-tekens.
+fn is_git_object_name(text: &str) -> bool {
+    matches!(text.len(), 40 | 64)
+        && text
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn cli_command() -> clap::Command {
+    Cli::command().version(cli_version())
+}
+
+fn parse_cli() -> Cli {
+    let matches = cli_command().get_matches();
+    match Cli::from_arg_matches(&matches) {
+        Ok(cli) => cli,
+        Err(err) => err.exit(),
+    }
+}
+
 fn main() {
     interrupt::install();
-    let cli = Cli::parse();
+    let cli = parse_cli();
     let extra = show_extra(cli.quiet, cli.verbose, io::stderr().is_terminal());
     if let Some(shell) = cli.completions {
         exit_or_interrupt(print_completions(shell, extra), extra);
@@ -760,6 +806,51 @@ fn render_empty_message(frame: &mut ratatui::Frame) {
 mod tests {
     use super::*;
     use symlog::model::Level;
+
+    #[test]
+    fn debug_version_appends_a_git_object_name() {
+        let sha1 = "ab".repeat(20);
+        let sha256 = "cd".repeat(32);
+        assert_eq!(
+            format_cli_version("1.0.0", Some(&sha1), true),
+            format!("1.0.0 {sha1}")
+        );
+        assert_eq!(
+            format_cli_version("1.0.0", Some(&sha256), true),
+            format!("1.0.0 {sha256}")
+        );
+    }
+
+    #[test]
+    fn version_omits_a_sha_git_did_not_print() {
+        let short = "ab".repeat(19);
+        let upper = "ab".repeat(20).to_ascii_uppercase();
+        let not_hex = "zz".repeat(20);
+        let samples = [
+            "",
+            "HEAD",
+            "main",
+            "abc",
+            short.as_str(),
+            upper.as_str(),
+            not_hex.as_str(),
+        ];
+        for sha in samples {
+            assert_eq!(format_cli_version("1.0.0", Some(sha), true), "1.0.0");
+            assert_eq!(format_cli_version("1.0.0", Some(sha), false), "1.0.0");
+        }
+        assert_eq!(format_cli_version("1.0.0", None, true), "1.0.0");
+        assert_eq!(format_cli_version("1.0.0", None, false), "1.0.0");
+    }
+
+    #[test]
+    fn release_version_omits_the_sha() {
+        let sha1 = "ab".repeat(20);
+        let sha256 = "cd".repeat(32);
+        assert_eq!(format_cli_version("1.0.0", Some(&sha1), false), "1.0.0");
+        assert_eq!(format_cli_version("1.0.0", Some(&sha256), false), "1.0.0");
+        assert_eq!(env!("CARGO_PKG_VERSION"), "1.0.0");
+    }
 
     #[test]
     fn extra_follows_quiet_verbose_and_the_terminal() {

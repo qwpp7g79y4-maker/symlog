@@ -28,8 +28,8 @@ pub mod startup;
 pub mod time;
 pub mod tui;
 
-/// Placeholder tot er een CLI-laag is die dit toont; bestaat zodat de crate een
-/// lib-test heeft om CI tegen te draaien (T1).
+/// Crate-versie uit `Cargo.toml`. `--version` print deze tekst. Een debug-build
+/// zet er in de binary de git-sha achter; deze functie blijft de crate-versie.
 pub fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")
 }
@@ -39,7 +39,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn version_is_not_empty() {
-        assert!(!version().is_empty());
+    fn version_is_the_crate_version() {
+        assert_eq!(version(), env!("CARGO_PKG_VERSION"));
+        assert_eq!(version(), "1.0.0");
     }
 }
