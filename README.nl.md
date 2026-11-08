@@ -89,7 +89,7 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 ## Kwaliteit
 
 427 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
-commit `2c4e4c2`. Zie `QUALITY.md`.
+commit `495d2b1`. Zie `QUALITY.md`.
 
 ## Licentie
 
