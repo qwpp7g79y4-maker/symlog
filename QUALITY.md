@@ -3,13 +3,21 @@
 Gates for this branch, measured with `cargo test --no-fail-fast`,
 `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`:
 
-- Tests: 456 passed, 0 failed, 1 ignored (sum over all test binaries), measured on
-  this `--quiet`/`--verbose` change (parent `9057b3e`).
+- Tests: 457 passed, 0 failed, 1 ignored (sum over all test binaries), measured on
+  this input-limit change (parent `43e4fee`). The 100 MiB row and the line-coverage
+  row stay the earlier measurement.
 - Clippy: clean with `-D warnings`.
 - Fmt: clean.
 
 README.md and README.nl.md state the same test count; update all three when the suite
 changes.
+
+## Input limit (2026-11-08, W-46, branch prep/w24-fout)
+
+- A regular log file may be at most 268435456 bytes (256 MiB). A larger file exits 2 with `boven de limiet van 268435456 bytes` and is not read. The limit is new. The measured 100 MiB input stays under it. The over-limit file is created in `/tmp` by the test and is not committed. The existing cap of 16 MiB per line and per record on stdin stays and was not raised. Exit codes stay 0, 1, 2, 3 and 4. A missing parent directory for `--output` stays exit 4.
+- `cargo test --no-fail-fast`: 457 passed / 0 failed / 1 ignored.
+- `cargo fmt --check`: clean. `cargo clippy --all-targets -- -D warnings`: clean.
+- Version stays 1.0.0. `rust-version` stays 1.88.
 
 ## Speed on a 100 MiB input (2026-11-08, W-26)
 

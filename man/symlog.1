@@ -15,7 +15,8 @@ plain-uitvoer zonder tty. Er zijn geen subcommando's en geen netwerk.
 Pad naar het logbestand, of
 .B -
 om van stdin te lezen (streaming, alleen plain; de invoer wordt niet in het geheugen
-verzameld). Verplicht, behalve met
+verzameld). Een gewoon bestand groter dan 268435456 bytes (256 MiB) is exit 2 en wordt
+niet ingelezen. Verplicht, behalve met
 .BR --completions .
 .SH OPTIONS
 .TP
@@ -70,6 +71,7 @@ Het pad bestaat niet en \fB--follow\fR staat uit.
 .TP
 .B 2
 Gebruiksfout: ontbrekend verplicht argument, ongeldige \fB--level\fR, het pad is een map,
+een gewoon bestand groter dan 268435456 bytes (256 MiB; het bestand wordt niet ingelezen),
 of \fB--quiet\fR samen met \fB--verbose\fR.
 .TP
 .B 3

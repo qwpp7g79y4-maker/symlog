@@ -107,14 +107,14 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 |---|---|
 | 0 | normaal afgesloten (een leeg bestand zonder `--follow` geeft niets en exit 0) |
 | 1 | pad bestaat niet en `--follow` staat uit |
-| 2 | gebruiksfout: ontbrekend argument, ongeldige `--level`, het pad is een map, of `--quiet` samen met `--verbose` |
+| 2 | gebruiksfout: ontbrekend argument, ongeldige `--level`, het pad is een map, een gewoon bestand boven 268435456 bytes (256 MiB), of `--quiet` samen met `--verbose`. Een bestand boven die grens wordt niet ingelezen |
 | 3 | `--tui` gevraagd zonder tty op stdout |
 | 4 | onherstelbare I/O-fout bij het lezen (ook: geen leesrechten), of een mislukte schrijfactie van `--output`. Een ontbrekende bovenliggende map wordt niet aangemaakt |
 
 ## Kwaliteit
 
-456 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
-deze `--quiet`/`--verbose`-wijziging (ouder `9057b3e`). Zie `QUALITY.md`.
+457 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
+deze invoerlimiet-wijziging (ouder `43e4fee`). Zie `QUALITY.md`.
 
 ## Licentie
 

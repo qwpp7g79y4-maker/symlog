@@ -28,6 +28,13 @@ pub const EXIT_IO_ERROR: i32 = 4;
 /// kan zonder een echte terminal niet getekend worden.
 pub const EXIT_TUI_REQUIRES_TTY: i32 = 3;
 
+/// Bovengrens voor een gewoon logbestand, in bytes (256 MiB).
+///
+/// De gemeten invoer van 104857600 bytes (100 MiB) blijft hieronder.
+/// Een groter bestand wordt op zijn grootte geweigerd en niet ingelezen.
+/// De grens van 16 MiB per regel en per record bij stdin blijft daarnaast staan.
+pub const MAX_INPUT_BYTES: u64 = 256 * 1024 * 1024;
+
 /// Toestand van `path` op dit moment (task.md T11 "Doet"): het resultaat van één
 /// `stat` + (als dat geen map is) één poging tot `File::open`.
 #[derive(Debug)]
@@ -40,8 +47,10 @@ pub enum Classification {
     PermissionDenied,
     /// Bestaat, is leesbaar, 0 bytes.
     Empty,
-    /// Bestaat, is leesbaar, heeft inhoud.
+    /// Bestaat, is leesbaar, heeft inhoud, en blijft binnen [`MAX_INPUT_BYTES`].
     NonEmpty,
+    /// Gewoon bestand groter dan [`MAX_INPUT_BYTES`]. De inhoud is niet gelezen.
+    TooLarge { len: u64 },
     /// Een onverwachte, niet-herstelbare I/O-fout (bijvoorbeeld een symlink-lus).
     Io(io::Error),
 }
@@ -64,7 +73,9 @@ pub fn classify(path: &Path) -> Classification {
     match File::open(path) {
         Ok(file) => {
             let len = file.metadata().map(|m| m.len()).unwrap_or(meta.len());
-            if len == 0 {
+            if len > MAX_INPUT_BYTES {
+                Classification::TooLarge { len }
+            } else if len == 0 {
                 Classification::Empty
             } else {
                 Classification::NonEmpty
@@ -149,6 +160,13 @@ pub fn outcome_for(path: &Path, classification: Classification) -> Outcome {
         },
         Classification::Empty => Outcome::Empty,
         Classification::NonEmpty => Outcome::Ready,
+        Classification::TooLarge { len } => Outcome::Exit {
+            message: format!(
+                "{p} is {len} bytes, boven de limiet van {MAX_INPUT_BYTES} bytes; geef een kleiner logbestand op, dit bestand wordt niet ingelezen",
+                p = path.display()
+            ),
+            code: EXIT_USAGE,
+        },
     }
 }
 

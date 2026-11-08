@@ -195,7 +195,7 @@ replaces these values with `***`:
 |---|---|
 | 0 | exited normally. An empty file without `--follow` exits 0 and prints nothing. With `--follow`, an empty file does not exit by itself |
 | 1 | the path is missing and `--follow` is off: stderr says the path does not exist, code 1. With `--follow` the process waits and the code is not 1 |
-| 2 | usage error: missing required argument, invalid `--level`, the path is a directory, or `--quiet` together with `--verbose` |
+| 2 | usage error: missing required argument, invalid `--level`, the path is a directory, a regular file over 268435456 bytes (256 MiB), or `--quiet` together with `--verbose`. A file over that limit is not read |
 | 3 | `--tui` requested without a tty on stdout |
 | 4 | I/O error while reading that cannot be recovered (including: no read permission), or a failed write of `--output`. A missing parent directory is not created |
 
@@ -260,14 +260,15 @@ behavior that is actually wired up.
 | Live follow in plain output: growth, rename rotation, copytruncate | F13 (generated) | `tests/follow_rotation.rs`, `tests/plain_cli.rs::plain_follow_streams_new_lines_as_the_file_grows` |
 | Plain output without a tty, filters applied | F1 | `tests/plain_cli.rs::f1_plain_output_matches_golden`, `::level_and_channel_filtered_plain_output_matches_golden` |
 | Empty file: exit 0; missing file: exit 1; directory: exit 2; `--tui` without a tty: exit 3; no read permission: exit 4 | F14 | `tests/startup_cli.rs`, `tests/plain_cli.rs::tui_flag_without_a_tty_exits_three` |
+| A regular file over 268435456 bytes exits 2 and is not read. The measured 100 MiB input stays under this limit | sparse file in `/tmp`, not committed | `tests/input_limit.rs` |
 | Read-only: no write or network calls | all fixtures | `tests/read_only_proof.rs` |
 | `--help` text | — | `tests/help_golden.rs` |
 | Secrets in plain output and the TUI become `***`; `--no-redact` shows the original | — | `tests/redact.rs` |
 
 ## Development
 
-The suite (`cargo test --no-fail-fast`) has 456 passing tests, 0 failing and 1 ignored,
-measured on this `--quiet`/`--verbose` change (parent `9057b3e`).
+The suite (`cargo test --no-fail-fast`) has 457 passing tests, 0 failing and 1 ignored,
+measured on this input-limit change (parent `43e4fee`).
 See `QUALITY.md` for the quality gates.
 
 ```sh
