@@ -191,6 +191,7 @@ fn stop_child(guard: &mut ChildGuard) -> std::process::ExitStatus {
     }
 }
 
+#[cfg(not(coverage))]
 #[test]
 fn sigint_on_blocked_stdin_writes_no_report_and_exits_130() {
     let root = scratch();
