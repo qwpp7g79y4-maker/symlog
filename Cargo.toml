@@ -58,3 +58,6 @@ tempfile = "3.27.0"
 # tijdens een actieve mmap kan SIGBUS geven (zie blueprint.md, T10); het standaardpad
 # in T2 is daarom pread/seek, niet mmap.
 mmap = ["dep:memmap2"]
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(coverage)'] }

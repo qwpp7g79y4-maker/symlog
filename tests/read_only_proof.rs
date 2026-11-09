@@ -211,7 +211,8 @@ fn read_only_subprocess_and_testbackend_leave_fixtures_untouched() {
 /// echte binary (plain-modus) voor elke fixture bevat geen `socket`/`connect`-
 /// aanroep en geen `openat` met een schrijfvlag. Overgeslagen als `strace` ontbreekt
 /// (bijvoorbeeld lokaal op macOS, dat niet in CI zit voor deze check).
-#[cfg(target_os = "linux")]
+// Uit onder `cargo llvm-cov` (cfg(coverage)): strace ziet de instrumentatie-schrijfacties (profraw).
+#[cfg(all(target_os = "linux", not(coverage)))]
 #[test]
 fn strace_shows_no_write_opens_or_network_calls_on_any_fixture() {
     if std::process::Command::new("strace")
