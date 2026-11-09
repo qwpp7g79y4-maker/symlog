@@ -5,8 +5,9 @@
 A terminal log viewer for Symfony/Monolog logs, with vim-like keys. `symlog` reads
 a log file only (read-only), runs entirely locally, and makes no network requests.
 
-> **Status:** 0.1.1 is published on [crates.io](https://crates.io/crates/symlog) and
-> tagged as v0.1.1. This README describes exactly what the current binary does; see
+> **Status:** 1.0.0 is release-ready and not yet published. The last version
+> published on [crates.io](https://crates.io/crates/symlog) is 0.1.1. This README
+> describes exactly what the current binary does; see
 > [Open items](#open-items) for what is deliberately still missing.
 
 Nederlandse versie: [README.nl.md](README.nl.md). The help text and a few lines the binary
