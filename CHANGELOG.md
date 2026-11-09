@@ -6,7 +6,17 @@ geen SemVer-garanties zolang het niet gepubliceerd is.
 
 ## [Unreleased]
 
-Werk op tak `prep/w24-fout`, na het 1.0.0-voorstel. Nog niet gepubliceerd.
+## [1.0.0] — 2026-11-09
+
+De opvolger van 0.1.1.
+
+### Gewijzigd
+
+- `--follow` of `--tui` samen met stdin (`-`) is een gebruiksfout (exit 2). Een
+  afgesloten pijp (`symlog - | head`) geeft exit 0. De hulptekst van `<PATH>` noemt `-`.
+- Foutmeldingen (ongeldige `--level`, map als pad, geen leesrechten, leesfout,
+  terminalfout) noemen nu wat er misging en wat de gebruiker kan doen; exitcodes
+  ongewijzigd.
 
 ### Toegevoegd
 
@@ -20,28 +30,10 @@ Werk op tak `prep/w24-fout`, na het 1.0.0-voorstel. Nog niet gepubliceerd.
   compleet is. Er staat hooguit één regel en één record in het geheugen, elk begrensd op
   16 MiB. Een test streamt 1 GiB door de binary en controleert dat het piekgeheugen
   onder 128 MiB blijft.
-
-### Gewijzigd
-
-- `--follow` of `--tui` samen met stdin (`-`) is een gebruiksfout (exit 2). Een
-  afgesloten pijp (`symlog - | head`) geeft exit 0. De hulptekst van `<PATH>` noemt `-`.
-
-## [1.0.0] — 2026-11-08
-
-Voorstel voor 1.0.0, de opvolger van 0.1.1. Geen tag en niet gepubliceerd.
-
-### Gewijzigd
-
-- Foutmeldingen (ongeldige `--level`, map als pad, geen leesrechten, leesfout,
-  terminalfout) noemen nu wat er misging en wat de gebruiker kan doen; exitcodes
-  ongewijzigd.
-
-### Toegevoegd
-
 - `examples/` met twee invoerbestanden en de verwachte uitvoer, plus
   `tests/examples_golden.rs`; `README.nl.md` (Nederlands) met Installatie, Voorbeeld en
   Opties.
-- `QUALITY.md` met de kwaliteitspoorten en het huidige testaantal (427 geslaagd,
+- `QUALITY.md` met de kwaliteitspoorten en het huidige testaantal (462 geslaagd,
   0 gefaald, 1 genegeerd); `README.md` noemt hetzelfde aantal.
 
 ## [0.1.1] — 2026-10-25
