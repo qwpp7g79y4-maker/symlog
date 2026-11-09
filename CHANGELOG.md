@@ -6,7 +6,7 @@ geen SemVer-garanties zolang het niet gepubliceerd is.
 
 ## [Unreleased]
 
-## [1.0.0] — 2026-11-09
+## [1.0.0] - 2026-11-09
 
 De opvolger van 0.1.1.
 
@@ -36,7 +36,7 @@ De opvolger van 0.1.1.
 - `QUALITY.md` met de kwaliteitspoorten en het huidige testaantal (462 geslaagd,
   0 gefaald, 1 genegeerd); `README.md` noemt hetzelfde aantal.
 
-## [0.1.1] — 2026-10-25
+## [0.1.1] - 2026-10-25
 
 ### Opgelost
 
@@ -53,7 +53,7 @@ De opvolger van 0.1.1.
   quoted waarde kon de redactie van die waarde omzeilen; die tekens worden nu net
   als andere format-tekens overgeslagen.
 
-## [0.1.0] — 2026-10-24
+## [0.1.0] - 2026-10-24
 
 Eerste werkende versie van `symlog`: een read-only terminal-logviewer voor
 Symfony/Monolog-logs.

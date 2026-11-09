@@ -285,7 +285,7 @@ cargo package --allow-dirty
 ```
 
 The `bench-mem` CI job runs the performance measurement from `docs/perf.md`; see
-that file for the current numbers against the targets in `blueprint.md`.
+that file for the current numbers and the performance targets they are measured against.
 
 ## License
 
