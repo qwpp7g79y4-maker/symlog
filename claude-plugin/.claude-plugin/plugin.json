@@ -1,0 +1,22 @@
+{
+  "name": "symlog",
+  "displayName": "symlog",
+  "version": "0.1.1",
+  "description": "Read and follow Symfony or Monolog log files in the terminal, with secret redaction and an optional text user interface.",
+  "author": {
+    "name": "PEPAI",
+    "url": "https://github.com/qwpp7g79y4-maker"
+  },
+  "homepage": "https://github.com/qwpp7g79y4-maker/symlog",
+  "repository": "https://github.com/qwpp7g79y4-maker/symlog",
+  "license": "MIT OR Apache-2.0",
+  "keywords": [
+    "logs",
+    "symfony",
+    "monolog",
+    "terminal",
+    "cli"
+  ],
+  "documentationUrl": "https://github.com/qwpp7g79y4-maker/symlog",
+  "supportUrl": "https://github.com/qwpp7g79y4-maker/symlog/issues"
+}
