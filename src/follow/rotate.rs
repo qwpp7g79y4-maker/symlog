@@ -16,11 +16,14 @@ use std::os::unix::fs::MetadataExt;
 /// ertussen hernoemd is (blueprint.md: "dev+inode+size").
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct FileId {
+    /// Device-nummer (`st_dev`).
     pub dev: u64,
+    /// Inode (`st_ino`).
     pub ino: u64,
 }
 
 impl FileId {
+    /// Leest `(dev, ino)` uit `meta`.
     pub fn of_metadata(meta: &Metadata) -> FileId {
         FileId {
             dev: meta.dev(),
@@ -35,7 +38,12 @@ impl FileId {
 pub enum Change {
     /// Stap 4: zelfde bestand, `size > indexed_end`. Nieuwe bytes zitten tussen
     /// `from` (= de vorige `indexed_end`) en `to` (= de nieuwe grootte).
-    Grown { from: u64, to: u64 },
+    Grown {
+        /// Vorige geïndexeerde eindoffset, in bytes.
+        from: u64,
+        /// Nieuwe bestandsgrootte, in bytes.
+        to: u64,
+    },
     /// Stap 2: `(dev, ino)` is veranderd (bijvoorbeeld rename-rotatie door logrotate,
     /// of het bestand is verwijderd en onder hetzelfde pad opnieuw aangemaakt).
     Rotated,

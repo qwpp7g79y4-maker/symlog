@@ -9,7 +9,7 @@
 //! De lijst van records (`records`) staat vast voor de levensduur van deze `App`; de
 //! kanaal- en niveaufilters uit het kiezermenu ("c"/"l") werken op een `visible`-lijst
 //! van indexen in `records` die aan het huidige [`FilterSpec`] voldoet. Dat is bewust
-//! een synchrone herberekening ([`App::recompute_visible`]) in plaats van de
+//! een synchrone herberekening (`recompute_visible`) in plaats van de
 //! achtergrond-filterthread uit blueprint.md ("generatienummer"): die thread bestaat om
 //! grote bestanden responsief te houden (task.md T12), een taak die nog niet gebouwd
 //! is; T8 zelf vraagt in "Klaar als" alleen snapshot-, resize- en
@@ -51,8 +51,11 @@ pub enum Mode {
 /// [`App::commit_picker`] verschilt.
 #[derive(Debug, Clone, Default)]
 pub struct Picker {
+    /// Zichtbare regels.
     pub items: Vec<String>,
+    /// Gemarkeerde regel, 0-gebaseerd.
     pub cursor: usize,
+    /// Per regel of die aangevinkt is.
     pub selected: Vec<bool>,
 }
 
@@ -166,52 +169,64 @@ impl App {
         self.redact = redact;
     }
 
+    /// Of maskeren aan staat.
     pub fn redact(&self) -> bool {
         self.redact
     }
 
     // --- lezen (gebruikt door crate::tui::view) ---
 
+    /// Huidige modus.
     pub fn mode(&self) -> Mode {
         self.mode
     }
 
+    /// Tekst van de statusbalk.
     pub fn status(&self) -> &str {
         &self.status
     }
 
+    /// Of follow aan staat.
     pub fn follow(&self) -> bool {
         self.follow
     }
 
+    /// Of het detailpaneel open is.
     pub fn detail_open(&self) -> bool {
         self.detail_open
     }
 
+    /// Geselecteerd frame in het detailpaneel, 0-gebaseerd.
     pub fn detail_frame_index(&self) -> usize {
         self.detail_frame
     }
 
+    /// Tekst in de zoekprompt.
     pub fn search_input(&self) -> &str {
         &self.search_input
     }
 
+    /// Kanaalkiezer.
     pub fn channel_picker(&self) -> &Picker {
         &self.channel_picker
     }
 
+    /// Niveaukiezer.
     pub fn level_picker(&self) -> &Picker {
         &self.level_picker
     }
 
+    /// Of `q` om afsluiten gevraagd heeft.
     pub fn should_quit(&self) -> bool {
         self.should_quit
     }
 
+    /// Frame dat `o` wil openen, tot de aanroeper het afhandelt.
     pub fn pending_open(&self) -> Option<&model::Frame> {
         self.pending_open.as_ref()
     }
 
+    /// `bestand:regel` dat `y` bij afsluiten naar stdout wil kopiëren.
     pub fn copy_on_exit(&self) -> Option<&str> {
         self.copy_on_exit.as_deref()
     }
@@ -355,26 +370,31 @@ impl App {
         self.pending_g
     }
 
+    /// Maakt een wachtende eerste `g` ongedaan.
     pub fn clear_pending_g(&mut self) {
         self.pending_g = false;
     }
 
     // --- zoeken (navigatie, task.md T8 "Doet": "`/`", "`n/N`") ---
 
+    /// Opent de zoekprompt en wist de invoer.
     pub fn enter_search_mode(&mut self) {
         self.mode = Mode::Search;
         self.search_input.clear();
     }
 
+    /// Sluit de zoekprompt zonder te zoeken.
     pub fn cancel_search_input(&mut self) {
         self.mode = Mode::Normal;
         self.search_input.clear();
     }
 
+    /// Voegt `c` toe aan de zoekprompt.
     pub fn push_search_char(&mut self, c: char) {
         self.search_input.push(c);
     }
 
+    /// Haalt het laatste teken uit de zoekprompt.
     pub fn pop_search_char(&mut self) {
         self.search_input.pop();
     }
@@ -445,6 +465,7 @@ impl App {
 
     // --- kanaal-/niveaukiezer (task.md T8 "Doet") ---
 
+    /// Opent de kanaalkiezer met de kanalen uit de geladen records.
     pub fn open_channel_picker(&mut self) {
         let mut channels: Vec<String> = self
             .records
@@ -468,6 +489,7 @@ impl App {
         self.mode = Mode::ChannelPicker;
     }
 
+    /// Opent de niveaukiezer met de acht Monolog-niveaus.
     pub fn open_level_picker(&mut self) {
         let items: Vec<String> = ALL_LEVELS.iter().map(|l| l.as_str().to_string()).collect();
         let mut picker = Picker::new(items);
@@ -480,6 +502,7 @@ impl App {
         self.mode = Mode::LevelPicker;
     }
 
+    /// Verplaatst de cursor in de open kiezer met `delta` regels.
     pub fn picker_move(&mut self, delta: isize) {
         match self.mode {
             Mode::ChannelPicker => self.channel_picker.move_cursor(delta),
@@ -488,6 +511,7 @@ impl App {
         }
     }
 
+    /// Zet het vinkje van de gemarkeerde regel om.
     pub fn picker_toggle_current(&mut self) {
         match self.mode {
             Mode::ChannelPicker => self.channel_picker.toggle_current(),
@@ -496,6 +520,7 @@ impl App {
         }
     }
 
+    /// Sluit de kiezer zonder het filter te wijzigen.
     pub fn cancel_picker(&mut self) {
         self.mode = Mode::Normal;
     }
@@ -556,6 +581,7 @@ impl App {
 
     // --- overige toetsen (task.md T8 "Doet") ---
 
+    /// Zet follow aan of uit.
     pub fn toggle_follow(&mut self) {
         self.follow = !self.follow;
         self.status = if self.follow {
@@ -565,11 +591,13 @@ impl App {
         };
     }
 
+    /// Opent of sluit het detailpaneel. Bij openen staat het frame weer op 0.
     pub fn toggle_detail(&mut self) {
         self.detail_open = !self.detail_open;
         self.detail_frame = 0;
     }
 
+    /// Opent of sluit de helpoverlay.
     pub fn toggle_help(&mut self) {
         self.mode = if self.mode == Mode::Help {
             Mode::Normal
@@ -620,6 +648,7 @@ impl App {
         }
     }
 
+    /// Vraagt om af te sluiten.
     pub fn quit(&mut self) {
         self.should_quit = true;
     }

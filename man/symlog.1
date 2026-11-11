@@ -1,0 +1,106 @@
+.TH SYMLOG 1 "november 2026" "symlog 1.0.0" "User Commands"
+.SH NAME
+symlog \- terminal-logviewer voor Symfony/Monolog-logs, met vim-toetsen
+.SH SYNOPSIS
+.nf
+symlog [OPTIONS] [PATH]
+symlog --completions <SHELL>
+.fi
+.SH DESCRIPTION
+symlog leest een Symfony/Monolog-logbestand en toont de records in een TUI, of als
+plain-uitvoer zonder tty. Er zijn geen subcommando's en geen netwerk.
+.SH ARGUMENTS
+.TP
+.I PATH
+Pad naar het logbestand, of
+.B -
+om van stdin te lezen (streaming, alleen plain; de invoer wordt niet in het geheugen
+verzameld). Een gewoon bestand groter dan 268435456 bytes (256 MiB) is exit 2 en wordt
+niet ingelezen. Verplicht, behalve met
+.BR --completions .
+.SH OPTIONS
+.TP
+.BR -f ", " --follow
+Blijf het bestand volgen (\fBtail -f\fR), ook als het nog niet bestaat.
+.TP
+.B --level \fILEVEL\fR
+Niveaufilter: een lijst (\fBerror,critical\fR) of een ondergrens (\fB>=warning\fR).
+.TP
+.B --channel \fICHANNELS\fR
+Kanaalfilter (herhaalbaar); \fB!kanaal\fR sluit dat kanaal juist uit.
+.TP
+.B --plain
+Forceer plain-uitvoer, ook op een tty.
+.TP
+.B --no-color
+Geen kleur, ook op een tty.
+.TP
+.B --no-redact
+Toon geheimen ongemaskeerd. Standaard worden ze vervangen door \fB***\fR.
+.TP
+.B --tui
+Forceer de TUI; zonder tty op stdout geeft dit exit 3.
+.TP
+.B --output \fIPATH\fR
+Schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand
+wordt pas vervangen als het nieuwe rapport af is. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt.
+Niet samen met \fB--tui\fR of \fB--completions\fR.
+.TP
+.B --quiet
+Verberg de hintregel. Geen contextregel. Een pipe laat beide al weg.
+.TP
+.B --verbose
+Toon de hintregel, en bij succes één contextregel op stderr. Niet samen met \fB--quiet\fR.
+.TP
+.B --completions \fISHELL\fR
+Print een shell-completionscript (bash of zsh) en stop. Mogelijke waarden: bash, zsh.
+Geen pad nodig.
+.TP
+.BR -h ", " --help
+Print help.
+.TP
+.BR -V ", " --version
+Print de versie (`symlog 1.0.0`, exit 0). Een debug-build toont ook de git-sha, alleen als git die bij de build zelf geeft. Een release-build toont die sha niet.
+.SH EXIT STATUS
+.TP
+.B 0
+Normaal afgesloten. Ook \fB--help\fR, \fB--version\fR en \fB-V\fR.
+.TP
+.B 1
+Het pad bestaat niet en \fB--follow\fR staat uit.
+.TP
+.B 2
+Gebruiksfout: ontbrekend verplicht argument, ongeldige \fB--level\fR, het pad is een map,
+een gewoon bestand groter dan 268435456 bytes (256 MiB; het bestand wordt niet ingelezen),
+of \fB--quiet\fR samen met \fB--verbose\fR.
+.TP
+.B 3
+\fB--tui\fR gevraagd zonder tty op stdout.
+.TP
+.B 4
+I/O-fout bij het lezen die niet te herstellen is (ook: geen leesrechten), een
+mislukte schrijfactie van het completionscript, of een mislukte schrijfactie van
+\fB--output\fR. Een ontbrekende bovenliggende map wordt niet aangemaakt.
+.TP
+.B 130
+SIGINT. Geen half eenmalig rapport. Een bestaand \fB--output\fR-bestand blijft staan
+als het nieuwe rapport niet af was. Stderr is \fIonderbroken door SIGINT\fR.
+De gewone codes 0, 1, 2, 3 en 4 blijven.
+.SH EXAMPLES
+Alle records van een log, plain:
+.PP
+.nf
+symlog --plain var/log/dev.log
+.fi
+.PP
+Alleen fouten van het kanaal request:
+.PP
+.nf
+symlog --plain --level error --channel request var/log/dev.log
+.fi
+.PP
+Een bash-completionscript installeren:
+.PP
+.nf
+symlog --completions bash > ~/.local/share/bash-completion/completions/symlog
+.fi

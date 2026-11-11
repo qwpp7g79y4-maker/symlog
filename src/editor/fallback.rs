@@ -25,7 +25,9 @@ const COLON_LINE_EDITORS: [&str; 1] = ["hx"];
 /// (blueprint.md T9).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EditorCommand {
+    /// Programmanaam of pad. Wordt niet via een shell gestart.
     pub program: String,
+    /// Losse argumenten, inclusief bestand en regel.
     pub args: Vec<String>,
 }
 

@@ -1,7 +1,7 @@
 //! Opstartcontroles: leeg en ontbrekend bestand (task.md T11; blueprint.md
 //! "Foutafhandeling", exitcodes uit de CLI-schets).
 //!
-//! Net als [`crate::editor`]'s scheiding tussen een pure beslisboom ([`editor::decide`])
+//! Net als [`crate::editor`]'s scheiding tussen een pure beslisboom ([`crate::editor::decide`])
 //! en de daadwerkelijke uitvoering is deze module puur: [`classify`] en [`outcome_for`]
 //! raken geen stderr/stdout aan en roepen nooit `process::exit`, zodat ze zonder een
 //! echt subproces getest kunnen worden. Alleen [`wait_until_present`] blokkeert
@@ -28,6 +28,13 @@ pub const EXIT_IO_ERROR: i32 = 4;
 /// kan zonder een echte terminal niet getekend worden.
 pub const EXIT_TUI_REQUIRES_TTY: i32 = 3;
 
+/// Bovengrens voor een gewoon logbestand, in bytes (256 MiB).
+///
+/// De gemeten invoer van 104857600 bytes (100 MiB) blijft hieronder.
+/// Een groter bestand wordt op zijn grootte geweigerd en niet ingelezen.
+/// De grens van 16 MiB per regel en per record bij stdin blijft daarnaast staan.
+pub const MAX_INPUT_BYTES: u64 = 256 * 1024 * 1024;
+
 /// Toestand van `path` op dit moment (task.md T11 "Doet"): het resultaat van één
 /// `stat` + (als dat geen map is) één poging tot `File::open`.
 #[derive(Debug)]
@@ -40,8 +47,13 @@ pub enum Classification {
     PermissionDenied,
     /// Bestaat, is leesbaar, 0 bytes.
     Empty,
-    /// Bestaat, is leesbaar, heeft inhoud.
+    /// Bestaat, is leesbaar, heeft inhoud, en blijft binnen [`MAX_INPUT_BYTES`].
     NonEmpty,
+    /// Gewoon bestand groter dan [`MAX_INPUT_BYTES`]. De inhoud is niet gelezen.
+    TooLarge {
+        /// Bestandsgrootte in bytes. De inhoud is niet gelezen.
+        len: u64,
+    },
     /// Een onverwachte, niet-herstelbare I/O-fout (bijvoorbeeld een symlink-lus).
     Io(io::Error),
 }
@@ -64,7 +76,9 @@ pub fn classify(path: &Path) -> Classification {
     match File::open(path) {
         Ok(file) => {
             let len = file.metadata().map(|m| m.len()).unwrap_or(meta.len());
-            if len == 0 {
+            if len > MAX_INPUT_BYTES {
+                Classification::TooLarge { len }
+            } else if len == 0 {
                 Classification::Empty
             } else {
                 Classification::NonEmpty
@@ -85,9 +99,27 @@ pub fn classify(path: &Path) -> Classification {
 /// eerste keer wachten, zodat de aanroeper één keer een "wacht op ..."-boodschap kan
 /// tonen in plaats van bij elke poll-tick.
 pub fn wait_until_present(path: &Path, on_first_wait: impl FnOnce()) -> Classification {
+    match wait_until_present_or_stop(path, on_first_wait, || false) {
+        Some(found) => found,
+        None => Classification::Missing,
+    }
+}
+
+/// Als [`wait_until_present`], maar `None` zodra `stop` waar is.
+///
+/// `stop` wordt bekeken vóór elke wacht. Een blokkade in `Watcher::wait` eindigt
+/// pas bij de volgende wake (notify of de poll van 500 ms).
+pub fn wait_until_present_or_stop(
+    path: &Path,
+    on_first_wait: impl FnOnce(),
+    stop: impl Fn() -> bool,
+) -> Option<Classification> {
     let watcher = Watcher::new(path, DEFAULT_POLL_INTERVAL);
     let mut on_first_wait = Some(on_first_wait);
     loop {
+        if stop() {
+            return None;
+        }
         match classify(path) {
             Classification::Missing => {
                 if let Some(f) = on_first_wait.take() {
@@ -95,7 +127,7 @@ pub fn wait_until_present(path: &Path, on_first_wait: impl FnOnce()) -> Classifi
                 }
                 watcher.wait();
             }
-            other => return other,
+            other => return Some(other),
         }
     }
 }
@@ -106,7 +138,12 @@ pub fn wait_until_present(path: &Path, on_first_wait: impl FnOnce()) -> Classifi
 #[derive(Debug, PartialEq, Eq)]
 pub enum Outcome {
     /// Meteen afsluiten: `message` naar stderr, exitcode `code`.
-    Exit { message: String, code: i32 },
+    Exit {
+        /// Tekst voor stderr.
+        message: String,
+        /// Proces-exitcode.
+        code: i32,
+    },
     /// Leeg bestand: TUI toont "log is leeg", plain niets (task.md T11 "Doet").
     /// Exitcode 0, geen boodschap.
     Empty,
@@ -127,19 +164,35 @@ pub fn outcome_for(path: &Path, classification: Classification) -> Outcome {
             code: EXIT_MISSING,
         },
         Classification::Directory => Outcome::Exit {
-            message: format!("{p} is een map, geen bestand", p = path.display()),
+            message: format!(
+                "{p} is een map, geen bestand; geef het pad van een logbestand op, bijvoorbeeld {p}/dev.log",
+                p = path.display()
+            ),
             code: EXIT_USAGE,
         },
         Classification::PermissionDenied => Outcome::Exit {
-            message: format!("{p}: geen leesrechten", p = path.display()),
+            message: format!(
+                "{p}: geen leesrechten; controleer de rechten (chmod/chown) of draai als een gebruiker die het bestand mag lezen",
+                p = path.display()
+            ),
             code: EXIT_IO_ERROR,
         },
         Classification::Io(err) => Outcome::Exit {
-            message: format!("{p}: {err}", p = path.display()),
+            message: format!(
+                "{p}: lezen mislukt ({err}); controleer of het bestand en de schijf bereikbaar zijn en probeer het opnieuw",
+                p = path.display()
+            ),
             code: EXIT_IO_ERROR,
         },
         Classification::Empty => Outcome::Empty,
         Classification::NonEmpty => Outcome::Ready,
+        Classification::TooLarge { len } => Outcome::Exit {
+            message: format!(
+                "{p} is {len} bytes, boven de limiet van {MAX_INPUT_BYTES} bytes; geef een kleiner logbestand op, dit bestand wordt niet ingelezen",
+                p = path.display()
+            ),
+            code: EXIT_USAGE,
+        },
     }
 }
 
@@ -253,7 +306,7 @@ mod tests {
         assert_eq!(
             outcome,
             Outcome::Exit {
-                message: "/tmp/een-map is een map, geen bestand".to_string(),
+                message: "/tmp/een-map is een map, geen bestand; geef het pad van een logbestand op, bijvoorbeeld /tmp/een-map/dev.log".to_string(),
                 code: EXIT_USAGE,
             }
         );
@@ -266,7 +319,7 @@ mod tests {
         assert_eq!(
             outcome,
             Outcome::Exit {
-                message: "/tmp/geheim.log: geen leesrechten".to_string(),
+                message: "/tmp/geheim.log: geen leesrechten; controleer de rechten (chmod/chown) of draai als een gebruiker die het bestand mag lezen".to_string(),
                 code: EXIT_IO_ERROR,
             }
         );

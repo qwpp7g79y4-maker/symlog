@@ -1,15 +1,19 @@
-Usage: symlog [OPTIONS] <PATH>
+Usage: symlog [OPTIONS] [PATH]
 
 Arguments:
-  <PATH>  Pad naar het logbestand
+  [PATH]  Pad naar het logbestand, of `-` om van stdin te lezen (streaming, alleen plain; de invoer wordt niet in het geheugen verzameld)
 
 Options:
-  -f, --follow              Blijf het bestand volgen (`tail -f`), ook als het nog niet bestaat
-      --level <LEVEL>       Niveaufilter: een lijst (`error,critical`) of een ondergrens (`>=warning`)
-      --channel <CHANNELS>  Kanaalfilter (herhaalbaar); `!kanaal` sluit dat kanaal juist uit
-      --plain               Forceer plain-uitvoer, ook op een tty
-      --no-color            Geen kleur, ook op een tty
-      --no-redact           Toon geheimen ongemaskeerd. Standaard worden ze vervangen door `***`
-      --tui                 Forceer de TUI; zonder tty op stdout geeft dit exit 3
-  -h, --help                Print help
-  -V, --version             Print version
+  -f, --follow               Blijf het bestand volgen (`tail -f`), ook als het nog niet bestaat
+      --level <LEVEL>        Niveaufilter: een lijst (`error,critical`) of een ondergrens (`>=warning`)
+      --channel <CHANNELS>   Kanaalfilter (herhaalbaar); `!kanaal` sluit dat kanaal juist uit
+      --plain                Forceer plain-uitvoer, ook op een tty
+      --no-color             Geen kleur, ook op een tty
+      --no-redact            Toon geheimen ongemaskeerd. Standaard worden ze vervangen door `***`
+      --tui                  Forceer de TUI; zonder tty op stdout geeft dit exit 3
+      --output <PATH>        Schrijf de plain-uitvoer naar dit bestand in plaats van stdout. Een bestaand bestand wordt vervangen. Een ontbrekende bovenliggende map is een fout en wordt niet aangemaakt
+      --quiet                Verberg de hintregel. Geen contextregel. Een pipe laat beide al weg
+      --verbose              Toon de hintregel, en bij succes één contextregel op stderr. Niet samen met --quiet
+      --completions <SHELL>  Print een shell-completionscript (bash of zsh) en stop [possible values: bash, zsh]
+  -h, --help                 Print help
+  -V, --version              Print version

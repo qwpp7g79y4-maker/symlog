@@ -13,7 +13,9 @@
 /// (task.md T9 "Doet": "ook uit config").
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MapEntry {
+    /// Containerprefix, bijvoorbeeld `/var/www`.
     pub container: String,
+    /// Lokale prefix die de containerprefix vervangt.
     pub local: String,
 }
 
@@ -40,6 +42,7 @@ pub struct PathMap {
 }
 
 impl PathMap {
+    /// Bouwt een map uit `--map`-regels. Bij het opzoeken wint de langste prefix.
     pub fn new(entries: Vec<MapEntry>) -> PathMap {
         PathMap { entries }
     }

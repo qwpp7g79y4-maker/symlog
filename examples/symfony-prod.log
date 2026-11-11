@@ -1,0 +1,10 @@
+[2026-03-02T08:15:01.204118+00:00] request.INFO: Matched route "app_order_show". {"route":"app_order_show","method":"GET"} []
+[2026-03-02T08:15:01.310552+00:00] doctrine.DEBUG: Executing query: SELECT * FROM orders WHERE id = ? {"params":[1042]} []
+[2026-03-02T08:15:02.870031+00:00] security.WARNING: Failed login attempt for "demo@example.com" {"ip":"203.0.113.7"} []
+[2026-03-02T08:15:03.001944+00:00] app.ERROR: Payment gateway timeout api_key=demo-not-a-real-key {"order_id":1042,"api_key":"demo-not-a-real-key"} []
+[2026-03-02T08:15:04.512003+00:00] request.CRITICAL: Uncaught RuntimeException: Order 1042 could not be loaded in /var/www/src/Service/OrderLoader.php:57
+Stack trace:
+#0 /var/www/src/Controller/OrderController.php(31): App\Service\OrderLoader->load(1042)
+#1 /var/www/vendor/symfony/http-kernel/HttpKernel.php(163): App\Controller\OrderController->show(1042)
+#2 {main} [] []
+[2026-03-02T08:15:05.000000+00:00] app.NOTICE: Cache cleared [] []

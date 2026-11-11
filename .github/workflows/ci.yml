@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/v1.0.0]
   pull_request:
 
 env:
@@ -60,10 +60,15 @@ jobs:
           # Plugin-bundle path is assembled so this workflow file is not itself flagged.
           skip_dir="cla"
           skip_dir="${skip_dir}ude-plugin/"
-          if git ls-files -z \
-              | grep -zv '^docs/forbidden-words\.txt$' \
+          # badge.json carries the public mark. The same mark is the alt text on the
+          # shields row, so that one line is not a name leak.
+          hits=$(git ls-files -z \
+              | grep -zvE '^(docs/forbidden-words\.txt|\.github/badge\.json)$' \
               | grep -zv "^${skip_dir}" \
-              | xargs -0 grep -niE -f "$patterns" --; then
+              | xargs -0 grep -niE -f "$patterns" -- \
+              | grep -v 'img.shields.io/endpoint' || true)
+          if [ -n "$hits" ]; then
+            printf '%s\n' "$hits"
             echo "Verboden woord gevonden (zie hierboven); verwijder het uit het publieke bestand."
             exit 1
           fi

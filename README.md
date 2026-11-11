@@ -1,72 +1,94 @@
 # symlog
 
-[![crates.io](https://img.shields.io/crates/v/symlog.svg)](https://crates.io/crates/symlog)
+A terminal log viewer for Symfony/Monolog logs, with vim-like keys. `symlog` reads
+a log file only (read-only), runs entirely locally, and makes no network requests.
 
-Een terminal-logviewer voor Symfony/Monolog-logs, met vim-achtige toetsen. `symlog`
-leest een logbestand alleen (read-only), werkt volledig lokaal en doet geen
-netwerkverkeer.
+[![crates.io](https://img.shields.io/crates/v/symlog.svg)](https://crates.io/crates/symlog) [![downloads](https://img.shields.io/crates/d/symlog.svg)](https://crates.io/crates/symlog) [![CI](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml/badge.svg)](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml) [![PEPAI checked](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqwpp7g79y4-maker%2Fsymlog%2Fmain%2F.github%2Fbadge.json)](QUALITY.md) [![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-blue.svg)](https://github.com/qwpp7g79y4-maker/symlog/blob/main/Cargo.toml) [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
-> **Status:** versie 0.1.1 is de huidige release, uitgebracht op
-> [crates.io](https://crates.io/crates/symlog) en getagd als v0.1.1. Deze README beschrijft
-> precies wat de huidige binary doet; zie ["Open punten"](#open-punten) voor wat er bewust
-> nog ontbreekt.
+Nederlandse versie: [README.nl.md](README.nl.md). The help text and a few lines the binary
+prints are Dutch (`wacht op <pad>...`, `— geroteerd —`, `— afgekapt —`).
 
-## Wat het doet
+## What it does
 
-- Leest het Monolog LineFormatter- en JsonFormatter-formaat (LineFormatter voor
-  Monolog 1, 2 en 3, JsonFormatter als NDJSON), ook door elkaar in één bestand: het
-  formaat wordt per record bepaald, niet per bestand.
-- Herkent multiline-stacktraces (ook over meerdere `[previous exception]`-blokken) en
-  JSON-exceptions, en toont de frames (bestand, regel, functie) gestructureerd onder
-  het bericht.
-- Toont kapotte regels, ongeldige JSON en ongeldige UTF-8 als leesbare "raw"-records
-  in plaats van te crashen; ANSI-escapes en NUL-bytes in de logtekst worden
-  geneutraliseerd voor weergave.
-- Filtert op kanaal (`--channel`, herhaalbaar, `!kanaal` sluit uit) en op niveau
-  (`--level error,critical` of `--level >=warning`); in de TUI ook interactief via de
-  toetsen `c` en `l`.
-- In de TUI: `/` zoekt met een reguliere expressie in bericht en context en springt
-  naar de volgende/vorige match (`n`/`N`).
-- Toont brede tekens (CJK, emoji, inclusief ZWJ-reeksen) en combinerende accenten met
-  de juiste kolombreedte, en kapt nooit midden in een teken af.
-- Volgt een bestand live (`--follow`, zoals `tail -f`) in **plain-uitvoer**: groei,
-  rename-rotatie (bijvoorbeeld `logrotate`) en afkappen (`copytruncate`) worden
-  gedetecteerd, met een scheidingsregel (`— geroteerd —` / `— afgekapt —`) in de
-  uitvoer. Zie ["Open punten"](#open-punten) voor de beperking hiervan in de TUI.
-- Werkt zonder terminal (pipe, redirect, CI) als plain-tekstuitvoer: één regel per
-  record, frames ingesprongen, kleur alleen op een echte tty en zonder `NO_COLOR`.
-- Is aantoonbaar read-only: een testrun op alle fixtures met `chmod a-w` laat mtimes en
-  hashes ongewijzigd, en een `strace`-test op Linux CI faalt als het proces ooit een
-  logbestand met schrijfrechten of een netwerk-socket opent. Die test is één keer
-  handmatig uitgeprobeerd met een bewust kapotte variant van `Reader::open`
-  (`OpenOptions::new().read(true).write(true).open(...)` in plaats van `File::open`):
-  check 1 faalde toen op de hash-vergelijking. De open zelf schrijft niets, maar laat
-  zien dat de test een schrijfbare handle wél zou opmerken zodra er geschreven wordt.
-  Die variant staat niet in de broncode; om de proef te herhalen, open dan het bestand in
-  `Reader::open` tijdelijk op die manier.
+- Reads Monolog LineFormatter and JsonFormatter (LineFormatter for Monolog 1, 2 and
+  3, JsonFormatter as NDJSON), including mixed in one file: the format is decided
+  per record, not per file.
+- Recognizes multiline stack traces (including across several `[previous exception]`
+  blocks) and JSON exceptions, and shows the frames (file, line, function) structured
+  under the message.
+- Shows broken lines, invalid JSON and invalid UTF-8 as readable "raw" records
+  instead of crashing; ANSI escapes and NUL bytes in the log text are neutralized
+  before display.
+- Filters by channel (`--channel`, repeatable; `!channel` excludes) and by level
+  (`--level error,critical` or `--level error,critical`); in the TUI also interactively
+  with the keys `c` and `l`.
+- In the TUI: `/` searches message and context with a regular expression and jumps
+  to the next or previous match (`n`/`N`).
+- Renders wide characters (CJK, emoji, including ZWJ sequences) and combining marks
+  at the correct column width, and never truncates in the middle of a character.
+- Follows a file live (`--follow`, like `tail -f`) in **plain output**: growth,
+  rename rotation (for example `logrotate`) and truncation (`copytruncate`) are
+  detected, with a separator line (`— geroteerd —` / `— afgekapt —`) in the output.
+  See [Open items](#open-items) for the limit of this in the TUI.
+- Works without a terminal (pipe, redirect, CI) as plain text: one line per record,
+  frames indented, color only on a real tty and when `NO_COLOR` is unset.
+- Is demonstrably read-only: a test run over all fixtures with `chmod a-w` leaves
+  mtimes and hashes unchanged, and a `strace` test on Linux CI fails if the process
+  ever opens a log file with write permission or opens a network socket. That test
+  was tried once by hand with a deliberately broken variant of `Reader::open`
+  (`OpenOptions::new().read(true).write(true).open(...)` instead of `File::open`):
+  check 1 then failed on the hash comparison. The open itself writes nothing, but it
+  shows that the test would notice a writable handle as soon as something is written.
+  That variant is not in the source; to repeat the check, open the file in
+  `Reader::open` that way temporarily.
 
-## Installatie
+## Installation
+
+Version 1.0.0 is on [crates.io](https://crates.io/crates/symlog). With Rust 1.88 or newer:
 
 ```sh
 cargo install symlog
-cargo install --git https://github.com/qwpp7g79y4-maker/symlog
+symlog --help
 ```
 
-Of vanuit een lokale checkout: `cargo install --path .`
+`cargo install --locked symlog` pins the crate's lockfile.
 
-## Gebruik
+For the latest `main`: `cargo install --locked --git https://github.com/qwpp7g79y4-maker/symlog`.
+
+From a local checkout: `cargo install --path .`
+
+## Aan de slag in 5 minuten
+
+Run these from a checkout of this repository (they use the fixtures in `tests/fixtures`;
+no system logs, no network, no TUI). `tests/quickstart_readme.rs` runs every `symlog`
+line below literally.
+
+```sh
+symlog tests/fixtures/line-basic.log --plain --no-color
+symlog tests/fixtures/line-basic.log --plain --no-color --level error
+symlog tests/fixtures/line-basic.log --plain --no-color --level error,critical
+symlog tests/fixtures/line-basic.log --plain --no-color --channel request
+symlog tests/fixtures/json-basic.ndjson --plain --no-color
+```
+
+The first line prints every record, one per line. The next ones keep only a level, a
+level range or a channel. The last one reads a JsonFormatter (NDJSON) file the same way.
+
+## Usage
 
 ```
-symlog <PAD> [-f|--follow] [--level LEVEL] [--channel KANAAL]... [--plain] [--no-color] [--no-redact] [--tui]
+symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [--no-color] [--no-redact] [--tui] [--output PATH] [--quiet | --verbose]
+symlog --completions <bash|zsh>
 ```
 
-`<PAD>` is verplicht; er is geen automatische `var/log/...`-standaardwaarde en geen
-stdin-steun (`-`) in deze versie.
+`<PATH>` is required; there is no automatic `var/log/...` default. `-` reads stdin
+in one pass and writes each record as plain text when the record is complete.
+`--follow` and `--tui` with `-` are a usage error (exit 2).
 
-### Voorbeeld
+## Example
 
-Echte uitvoer op `tests/fixtures/line-basic.log` (plain-modus, bijvoorbeeld via een
-pipe of `--plain`):
+Real output on `tests/fixtures/line-basic.log` (plain mode, for example via a pipe
+or `--plain`):
 
 ```
 $ symlog tests/fixtures/line-basic.log --plain --no-color
@@ -80,7 +102,7 @@ $ symlog tests/fixtures/line-basic.log --plain --no-color
 [2026-01-15T10:30:52.999999+01:00] request.EMERGENCY: Service unreachable
 ```
 
-Dezelfde fixture in de interactieve TUI (80×24, geen filter):
+The same fixture in the interactive TUI (80×24, no filter):
 
 ```
  symlog — 1/8 records
@@ -96,150 +118,165 @@ Dezelfde fixture in de interactieve TUI (80×24, geen filter):
 j/k gg/G Ctrl-d/u / n/N c l F o y ? q
 ```
 
-## Toetsen (TUI)
+`examples/` holds two realistic inputs (`symfony-prod.log`, `api-json.ndjson`) with the
+expected `--plain --no-color` output next to them (`*.expected`); `tests/examples_golden.rs`
+compares them.
 
-| Toets | Doet |
+## Keys (TUI)
+
+| Key | Does |
 |---|---|
-| `j` / `k` / `↓` / `↑` | selectie één regel omlaag/omhoog |
-| `gg` | naar de eerste regel |
-| `G` | naar de laatste regel |
-| `Ctrl-d` / `Ctrl-u` | een halve pagina omlaag/omhoog |
-| `/` | zoekprompt openen (reguliere expressie); `Enter` bevestigt, `Esc` annuleert, `Backspace` wist een teken |
-| `n` / `N` | naar de volgende/vorige zoekmatch |
-| `c` | kanaalkiezer (multi-select; `j`/`k`/`↓`/`↑` verplaatst, `Spatie` toggelt, `Enter` bevestigt, `Esc` annuleert) |
-| `l` | niveaukiezer (zelfde bediening als `c`) |
-| `F` | follow-indicator aan/uit (zie ["Open punten"](#open-punten)) |
-| `o` | toont bestand:regel van het geselecteerde frame in de statusbalk |
-| `y` | markeert bestand:regel van het geselecteerde frame om bij afsluiten naar stdout te printen |
-| `Enter` / `Tab` | detailpaneel (context, extra, frames) open/dicht |
-| `?` | help-overlay (elke toets sluit hem weer) |
-| `q` / `Ctrl-c` | afsluiten |
+| `j` / `k` / `↓` / `↑` | move the selection one row down/up |
+| `gg` | go to the first row |
+| `G` | go to the last row |
+| `Ctrl-d` / `Ctrl-u` | half a page down/up |
+| `/` | open the search prompt (regular expression); `Enter` confirms, `Esc` cancels, `Backspace` deletes one character |
+| `n` / `N` | go to the next/previous search match |
+| `c` | channel picker (multi-select; `j`/`k`/`↓`/`↑` moves, `Space` toggles, `Enter` confirms, `Esc` cancels) |
+| `l` | level picker (same controls as `c`) |
+| `F` | toggle the follow indicator (see [Open items](#open-items)) |
+| `o` | shows file:line of the selected frame in the status bar |
+| `y` | marks file:line of the selected frame to print to stdout on exit |
+| `Enter` / `Tab` | open/close the detail pane (context, extra, frames) |
+| `?` | help overlay (any key closes it again) |
+| `q` / `Ctrl-c` | quit |
 
-Er wordt niet horizontaal gescrold. In de normale modus doet `h` niets; `l` opent de
-niveaukiezer. Tekst die breder is dan het venster wordt afgekapt.
+There is no horizontal scrolling. In normal mode `h` does nothing; `l` opens the
+level picker. Text wider than the window is truncated.
 
-## Vlaggen
+## Options
 
-Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
+Exact list from `symlog --help` (see `tests/golden/help.txt`):
 
-| Vlag | Doet |
+| Flag | Does |
 |---|---|
-| `<PATH>` | pad naar het logbestand (verplicht) |
-| `-f`, `--follow` | zonder tty: ontbreekt het pad, dan `wacht op <pad>...` op stderr en het proces blijft wachten (geen exit 1). Verschijnt het bestand, dan komen de records op stdout en het proces blijft lopen. Een leeg bestand geeft geen uitvoer en stopt niet; een regel die er later bij komt, verschijnt alsnog |
-| `--level <LEVEL>` | niveaufilter: een lijst (`error,critical`) of een ondergrens (`>=warning`) |
-| `--channel <KANAAL>` | kanaalfilter, herhaalbaar; `!kanaal` sluit dat kanaal juist uit |
-| `--plain` | forceer plain-uitvoer, ook op een tty |
-| `--no-color` | geen kleur, ook op een tty |
-| `--no-redact` | toon geheimen ongemaskeerd; standaard worden ze `***` |
-| `--tui` | forceer de TUI; zonder tty op stdout geeft dit exit 3 |
+| `[PATH]` | path to the log file (required, except with `--completions`) |
+| `-f`, `--follow` | without a tty: if the path is missing, `wacht op <pad>...` is printed on stderr and the process keeps waiting (not exit 1). When the file appears, records go to stdout and the process keeps running. An empty file produces no output and does not stop; a line that arrives later still appears |
+| `--level <LEVEL>` | level filter: a list (`error,critical`) or a lower bound (`>=warning`) |
+| `--channel <CHANNELS>` | channel filter, repeatable; `!channel` excludes that channel |
+| `--plain` | force plain output, even on a tty |
+| `--no-color` | no color, even on a tty |
+| `--no-redact` | show secrets unmasked; by default they become `***` |
+| `--tui` | force the TUI; without a tty on stdout this exits 3 |
+| `--output <PATH>` | write the plain output to this file instead of stdout. An existing file is replaced. A missing parent directory is an error and is not created. Not together with `--tui` or `--completions` |
+| `--quiet` | hide the hint line, even on a terminal. No context line. A pipe already omits both |
+| `--verbose` | print the hint line, and when output was written one `context:` line on stderr, even on a pipe. Not with `--quiet` |
+| `--completions <SHELL>` | print a shell completion script (`bash` or `zsh`) and exit 0; `<PATH>` is then not needed |
 | `-h`, `--help` | help |
-| `-V`, `--version` | versie |
+| `-V`, `--version` | version |
 
-## Geheimen
+## Secrets
 
-Standaard vervangt symlog in de plain-uitvoer en in de TUI (lijst, zoekresultaten en
-detail) deze waarden door `***`:
+By default, in plain output and in the TUI (list, search results and detail), symlog
+replaces these values with `***`:
 
-- de waarde na `password`, `passwd`, `token`, `secret`, `api_key` en `apikey`
-  (`=` of `:`, hoofdletterongevoelig, ook als JSON-veld);
-- het token na `Authorization: Bearer`, ook als JSON-veld
+- the value after `password`, `passwd`, `token`, `secret`, `api_key` and `apikey`
+  (`=` or `:`, case-insensitive, including as a JSON field);
+- the token after `Authorization: Bearer`, including as a JSON field
   (`"Authorization": "Bearer …"`);
-- het wachtwoord in URL-userinfo na `://` (`user:wachtwoord@host`). Staat in de
-  gebruikersnaam een hoog-risico token (`ghp_`, `github_pat_`, `xoxb-`,
-  `sk_live_` / `sk_test_`, `AKIA` of een JWT), ook ná een voorvoegsel
-  (`x-access-token-ghp_…`, `svc-AKIA…`, `bearer-<jwt>`), dan worden gebruikersnaam
-  én wachtwoord `***` (`scheme://***:***@host`). Een gewone naam blijft staan.
-  `scheme://<token>@host` (geen wachtwoord) valt onder het token zelf;
-- een sleutel `sk_live_` of `sk_test_` gevolgd door minstens één letter of cijfer;
-- een AWS-toegangssleutel `AKIA` plus precies 16 hoofdletters of cijfers;
-- een GitHub-token `ghp_` plus minstens 36 letters of cijfers;
-- een fijnmazig GitHub-token `github_pat_` plus minstens 82 letters, cijfers of `_`;
-- een Slack-bottoken `xoxb-` met een lichaam van minstens 10 tekens (`[A-Za-z0-9-]`);
-- een JWT: drie base64url-delen van minstens 16 tekens, gescheiden door één punt,
-  waarvan het eerste met `eyJ` begint.
+- the password in URL userinfo after `://` (`user:password@host`). If the username
+  contains a high-risk token (`ghp_`, `github_pat_`, `xoxb-`, `sk_live_` /
+  `sk_test_`, `AKIA`, or a JWT), including after a prefix (`x-access-token-ghp_…`,
+  `svc-AKIA…`, `bearer-<jwt>`), both username and password become `***`
+  (`scheme://***:***@host`). An ordinary name is left as-is.
+  `scheme://<token>@host` (no password) is covered by the token itself;
+- a key `sk_live_` or `sk_test_` followed by at least one letter or digit;
+- an AWS access key `AKIA` plus exactly 16 uppercase letters or digits;
+- a GitHub token `ghp_` plus at least 36 letters or digits;
+- a fine-grained GitHub token `github_pat_` plus at least 82 letters, digits or `_`;
+- a Slack bot token `xoxb-` with a body of at least 10 characters (`[A-Za-z0-9-]`);
+- a JWT: three base64url segments of at least 16 characters, separated by a single
+  dot, the first of which starts with `eyJ`.
 
-`--no-redact` toont de oorspronkelijke tekst. Het logbestand op schijf blijft
-ongewijzigd.
+`--no-redact` shows the original text. The log file on disk stays unchanged.
 
-## Exitcodes
+## Exit codes
 
-| Code | Betekenis |
+0 is success, 1 is a missing path (the only finding symlog reports; it has no threshold), 2 is invalid input. Codes 3 and 4 are extra and unchanged. SIGINT exits 130: stderr is `onderbroken door SIGINT`, and a one-shot `--output` file is not replaced by a half-written report. `--version` and `-V` print `symlog 1.0.0` and exit 0. A debug build also prints the git sha when the build got it from git itself. A release build does not print that sha. On a terminal, an error also prints a `hint:` line with the next step already in that error. A pipe, a redirect, or `--quiet` keeps the error line only. `--verbose` prints the hint even on a pipe, and when output was written one `context:` line on stderr (`records`). Plain output on stdout is unchanged. `--quiet` together with `--verbose` is exit 2.
+
+| Code | Meaning |
 |---|---|
-| 0 | normaal afgesloten. Een leeg bestand zonder `--follow` geeft 0 en geen uitvoer. Met `--follow` sluit een leeg bestand niet vanzelf af |
-| 1 | pad ontbreekt en `--follow` staat uit: stderr meldt dat het pad niet bestaat, code 1. Met `--follow` wacht het proces en is de code niet 1 |
-| 2 | gebruiksfout: ontbrekend verplicht argument, ongeldig `--level`, of pad is een map |
-| 3 | `--tui` gevraagd zonder tty op stdout |
-| 4 | I/O-fout tijdens lezen die niet herstelbaar is (inclusief: geen leesrechten) |
+| 0 | exited normally. An empty file without `--follow` exits 0 and prints nothing. With `--follow`, an empty file does not exit by itself |
+| 1 | the path is missing and `--follow` is off: stderr says the path does not exist, code 1. With `--follow` the process waits and the code is not 1 |
+| 2 | usage error: missing required argument, invalid `--level`, the path is a directory, a regular file over 268435456 bytes (256 MiB), or `--quiet` together with `--verbose`. A file over that limit is not read |
+| 3 | `--tui` requested without a tty on stdout |
+| 4 | I/O error while reading that cannot be recovered (including: no read permission), or a failed write of `--output`. A missing parent directory is not created |
+| 130 | SIGINT. No half-written one-shot report. An existing `--output` file stays when the new report was not finished. Stderr is `onderbroken door SIGINT`. Ordinary codes 0, 1, 2, 3 and 4 are unchanged |
 
-## Wat het NIET doet
+## What it does not do
 
-- Geen logverzameling, geen server, geen netwerk; alleen een lokaal bestand op PAD.
-- Geen stdin-invoer (`-`) in deze versie.
-- Schrijft, roteert of kapt nooit zelf een logbestand.
-- Geen aangepaste `LineFormatter`-formaatstrings; zulke regels worden als ruwe regels
-  getoond.
-- Geen pretty-printed (meerregelige) JSON-records.
-- Geen gzip-archieven (`*.log.gz`).
-- Geen hersortering op tijd; de volgorde is die van het bestand.
-- Springt niet naar een editor en rekent geen tijdzones om (zie
-  ["Open punten"](#open-punten)).
-- Opent containers niet zelf; geef het pad van het gemounte volume.
+- No log collection, no server, no network; only a local file at PATH, or `-` for stdin.
+- Stdin (`-`) is one-pass plain output. `--follow` and `--tui` with `-` are a usage error (exit 2).
+- Never writes, rotates or truncates the log file itself. `--output PATH` writes the plain output to that other path. A one-shot run replaces an existing file there only after the new report is complete. SIGINT exits 130 and leaves the previous file in place. A missing parent directory is not created.
+- No custom `LineFormatter` format strings; such lines are shown as raw lines.
+- No pretty-printed (multi-line) JSON records.
+- No gzip archives (`*.log.gz`).
+- No reordering by time; the order is the file order.
+- Does not jump to an editor and does not convert time zones (see
+  [Open items](#open-items)).
+- Does not open containers itself; pass the path of the mounted volume.
 
-## Alternatieven
+## Alternatives
 
-- **lnav** — krachtige algemene logviewer met SQL; Monolog-formaat via een eigen
-  formaatdefinitie *(niet geverifieerd door dit project)*.
-- **Symfony Profiler / web debug toolbar** — per request in de browser, niet voor
-  bestanden achteraf.
-- **`tail -f` + `grep` / `jq`** — altijd beschikbaar, geen stacktrace-frames.
-- **`less +F`** — volgen en zoeken, geen parsing.
-- Andere TUI-logviewers (bijvoorbeeld tailspin, hl) *(niet geverifieerd voor
-  Monolog)*.
+- **lnav** — powerful general log viewer with SQL; Monolog format via its own format
+  definition *(not verified by this project)*.
+- **Symfony Profiler / web debug toolbar** — per request in the browser, not for
+  files after the fact.
+- **`tail -f` + `grep` / `jq`** — always available, no stack-trace frames.
+- **`less +F`** — follow and search, no parsing.
+- Other TUI log viewers (for example tailspin, hl) *(not verified for Monolog)*.
 
-## Open punten
+## Open items
 
-De volgende onderdelen zijn als losse, zelfstandig geteste modules gebouwd, maar zijn
-**nog niet aangesloten** op de CLI of de interactieve TUI-lus van deze binary:
+The following pieces are built as separate, independently tested modules, but are
+**not yet wired** into the CLI or the interactive TUI loop of this binary:
 
-- **Editor-sprong**: met één toets (`o`/`Enter`) naar `bestand:regel` in Neovim, een
-  andere editor (`$VISUAL`/`$EDITOR`) of `vi` springen. De module hiervoor bestaat en
-  is op zichzelf getest (argv-tests met een nep-editor), maar de TUI roept hem nog
-  niet aan: `o` toont alleen `bestand:regel` in de statusbalk.
-- **Padmapping** (containerpad naar lokaal pad, bijvoorbeeld `/var/www` → een lokale
-  projectmap): de mappingslogica bestaat en is los getest, maar er is geen `--map`-
-  vlag of config om hem te vullen.
-- **Tijdzone-omrekening**: de weergavelogica voor "zoals in de log" / lokaal / een
-  IANA-naam bestaat, maar er is geen `--tz`-vlag; de TUI en de plain-uitvoer tonen
-  altijd de datumtijd-tekst zoals die in de log stond.
-- **Config-bestand** (`$XDG_CONFIG_HOME/symlog/config.toml`): nog niet gebouwd.
-- **`--follow` in de TUI**: `F` zet alleen een status-indicator aan; de interactieve
-  TUI-lus wacht op toetsaanslagen en leest het bestand niet opnieuw terwijl hij open
-  staat. Live volgen werkt wel volledig in plain-uitvoer (`--follow` zonder `--tui`,
-  of zonder tty).
-- Geen `--format`/`--grep`/`--server`/`--editor` vlaggen: die bestaan niet in deze
+- **Editor jump**: one key (`o`/`Enter`) to open `file:line` in Neovim, another
+  editor (`$VISUAL`/`$EDITOR`) or `vi`. The module exists and is tested on its own
+  (argv tests with a fake editor), but the TUI does not call it yet: `o` only shows
+  `file:line` in the status bar.
+- **Path mapping** (container path to a local path, for example `/var/www` → a local
+  project directory): the mapping logic exists and is tested on its own, but there
+  is no `--map` flag or config to fill it.
+- **Time-zone conversion**: the display logic for "as in the log" / local / an IANA
+  name exists, but there is no `--tz` flag; the TUI and plain output always show the
+  datetime text as it stood in the log.
+- **Config file** (`$XDG_CONFIG_HOME/symlog/config.toml`): not built yet.
+- **`--follow` in the TUI**: `F` only toggles a status indicator; the interactive TUI
+  loop waits for keystrokes and does not re-read the file while it is open. Live
+  follow works fully in plain output (`--follow` without `--tui`, or without a tty).
+- No `--format`/`--grep`/`--server`/`--editor` flags: they do not exist in this
   binary.
 
-Dit is bewust gedocumenteerd in plaats van verzwegen; de bovenstaande claims in dit
-bestand noemen alleen gedrag dat echt aangesloten is.
+This is documented on purpose instead of left unsaid; the claims above name only
+behavior that is actually wired up.
 
-## Claims en de tests die ze dekken
+## Claims and the tests that cover them
 
-| Claim hierboven | Fixture(s) | Test(s) |
+| Claim above | Fixture(s) | Test(s) |
 |---|---|---|
-| LineFormatter (Monolog 1–3) en JsonFormatter, ook gemengd | F1, F2, F5, F6, F11 | `tests/line_parser_golden.rs`, `tests/json_golden.rs` |
-| Multiline-stacktraces en JSON-exceptions als frames | F3, F4, F12 | `tests/multiline_golden.rs` |
-| Kapotte regels, ongeldige JSON/UTF-8, ANSI/NUL-neutralisatie zonder crash | F7, F8, F15 | `tests/raw_golden.rs`, `tests/raw_fuzz.rs` |
-| Kanaal- en niveaufilter (CLI en TUI-kiezers) | F1 | `src/filter.rs` (unit-tests), `src/main.rs::tests::level_and_channel_filters_apply_to_the_plain_output`, `src/tui/keys.rs::tests::channel_picker_keys_move_toggle_and_commit` |
-| TUI-regexzoeken (`/ n N`) | — | `src/tui/keys.rs::tests::full_keystroke_scenario_from_task_md` |
-| Brede tekens (CJK/emoji/ZWJ/combining) met juiste kolombreedte | F10 | `src/tui/view.rs::tests::snapshot_f10_wide_80x24` (en 40×10, 200×50), `src/tui/width.rs` (unit-tests) |
-| Live volgen in plain-uitvoer: groei, rename-rotatie, copytruncate | F13 (gegenereerd) | `tests/follow_rotation.rs`, `tests/plain_cli.rs::plain_follow_streams_new_lines_as_the_file_grows` |
-| Plain-uitvoer zonder tty, filters toegepast | F1 | `tests/plain_cli.rs::f1_plain_output_matches_golden`, `::level_and_channel_filtered_plain_output_matches_golden` |
-| Leeg bestand: exit 0; ontbrekend bestand: exit 1; map: exit 2; `--tui` zonder tty: exit 3; geen leesrechten: exit 4 | F14 | `tests/startup_cli.rs`, `tests/plain_cli.rs::tui_flag_without_a_tty_exits_three` |
-| Read-only: geen schrijf- of netwerkoproepen | alle fixtures | `tests/read_only_proof.rs` |
-| `--help`-tekst | — | `tests/help_golden.rs` |
-| Geheimen in plain-uitvoer en TUI worden `***`; `--no-redact` toont het origineel | — | `tests/redact.rs` |
+| LineFormatter (Monolog 1–3) and JsonFormatter, including mixed | F1, F2, F5, F6, F11 | `tests/line_parser_golden.rs`, `tests/json_golden.rs` |
+| Multiline stack traces and JSON exceptions as frames | F3, F4, F12 | `tests/multiline_golden.rs` |
+| Broken lines, invalid JSON/UTF-8, ANSI/NUL neutralization without a crash | F7, F8, F15 | `tests/raw_golden.rs`, `tests/raw_fuzz.rs` |
+| Channel and level filters (CLI and TUI pickers) | F1 | `src/filter.rs` (unit tests), `src/main.rs::tests::level_and_channel_filters_apply_to_the_plain_output`, `src/tui/keys.rs::tests::channel_picker_keys_move_toggle_and_commit` |
+| TUI regex search (`/ n N`) | — | `src/tui/keys.rs::tests::full_keystroke_scenario_from_task_md` |
+| Wide characters (CJK/emoji/ZWJ/combining) at the correct column width | F10 | `src/tui/view.rs::tests::snapshot_f10_wide_80x24` (and 40×10, 200×50), `src/tui/width.rs` (unit tests) |
+| Live follow in plain output: growth, rename rotation, copytruncate | F13 (generated) | `tests/follow_rotation.rs`, `tests/plain_cli.rs::plain_follow_streams_new_lines_as_the_file_grows` |
+| Plain output without a tty, filters applied | F1 | `tests/plain_cli.rs::f1_plain_output_matches_golden`, `::level_and_channel_filtered_plain_output_matches_golden` |
+| Empty file: exit 0; missing file: exit 1; directory: exit 2; `--tui` without a tty: exit 3; no read permission: exit 4 | F14 | `tests/startup_cli.rs`, `tests/plain_cli.rs::tui_flag_without_a_tty_exits_three` |
+| A regular file over 268435456 bytes exits 2 and is not read. The measured 100 MiB input stays under this limit | sparse file in `/tmp`, not committed | `tests/input_limit.rs` |
+| SIGINT exits 130 and does not replace an existing `--output` file with a partial report | linux x86_64 | `tests/sigint.rs` |
+| Read-only: no write or network calls | all fixtures | `tests/read_only_proof.rs` |
+| `--help` text | — | `tests/help_golden.rs` |
+| `--version` and `-V` print `symlog 1.0.0` and exit 0. A debug build also prints the git sha when git itself provided it. A release build does not | — | `tests/version_cli.rs`, `src/main.rs::tests::release_version_omits_the_sha` |
+| Secrets in plain output and the TUI become `***`; `--no-redact` shows the original | — | `tests/redact.rs` |
 
-## Ontwikkelen
+## Development
+
+The suite (`cargo test --no-fail-fast`) has 462 passing tests, 0 failing and 1 ignored,
+measured on this version change (parent `ae22844`) on linux x86_64. `tests/sigint.rs` is
+built only on that target.
+See `QUALITY.md` for the quality gates.
 
 ```sh
 cargo fmt --check
@@ -249,9 +286,9 @@ cargo deny check
 cargo package --allow-dirty
 ```
 
-De `bench-mem`-CI-job draait de prestatiemeting uit `docs/perf.md`; zie dat bestand
-voor de huidige cijfers tegenover de doelen uit `blueprint.md`.
+The `bench-mem` CI job runs the performance measurement from `docs/perf.md`; see
+that file for the current numbers and the performance targets they are measured against.
 
-## Licentie
+## License
 
-`MIT OR Apache-2.0`, zie `LICENSE-MIT` en `LICENSE-APACHE`.
+`MIT OR Apache-2.0`, see `LICENSE-MIT` and `LICENSE-APACHE`.

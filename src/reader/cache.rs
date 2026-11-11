@@ -17,6 +17,7 @@ pub struct RecordCache {
 }
 
 impl RecordCache {
+    /// Cache voor hooguit `capacity` records. `0` wordt 1.
     pub fn with_capacity(capacity: usize) -> Self {
         let capacity = NonZeroUsize::new(capacity).unwrap_or(NonZeroUsize::MIN);
         Self {
@@ -24,6 +25,7 @@ impl RecordCache {
         }
     }
 
+    /// Bytes op startoffset `offset`, als die nog in de cache staan.
     pub fn get(&self, offset: u64) -> Option<Arc<[u8]>> {
         self.inner
             .lock()
@@ -32,6 +34,7 @@ impl RecordCache {
             .cloned()
     }
 
+    /// Bewaart `bytes` onder startoffset `offset`. Een volle cache laat het minst recente record vallen.
     pub fn insert(&self, offset: u64, bytes: Arc<[u8]>) {
         self.inner
             .lock()
