@@ -1,8 +1,8 @@
 # Changelog
 
 Alle noemenswaardige wijzigingen in dit project staan in dit bestand. Het formaat is
-gebaseerd op [Keep a Changelog](https://keepachangelog.com/); dit project gebruikt nog
-geen SemVer-garanties zolang het niet gepubliceerd is.
+gebaseerd op [Keep a Changelog](https://keepachangelog.com/); dit project volgt
+Semantic Versioning vanaf 1.0.0.
 
 ## [Unreleased]
 

@@ -5,12 +5,20 @@ Nederlandse versie van [README.md](README.md) (Engels, volledig).
 Een terminal-logviewer voor Symfony/Monolog-logs, met vim-toetsen. `symlog` leest een
 logbestand alleen (read-only), draait volledig lokaal en doet geen netwerkverzoeken.
 
+[![crates.io](https://img.shields.io/crates/v/symlog.svg)](https://crates.io/crates/symlog) [![downloads](https://img.shields.io/crates/d/symlog.svg)](https://crates.io/crates/symlog) [![CI](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml/badge.svg)](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml) [![PEPAI gecontroleerd](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqwpp7g79y4-maker%2Fsymlog%2Fmain%2F.github%2Fbadge.json)](QUALITY.md) [![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-blue.svg)](https://github.com/qwpp7g79y4-maker/symlog/blob/main/Cargo.toml) [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#licentie)
+
 ## Installatie
+
+Versie 1.0.0 staat op [crates.io](https://crates.io/crates/symlog). Met Rust 1.88 of nieuwer:
 
 ```sh
 cargo install symlog
-cargo install --git https://github.com/qwpp7g79y4-maker/symlog
+symlog --help
 ```
+
+`cargo install --locked symlog` zet de lockfile vast.
+
+Voor de laatste `main`: `cargo install --locked --git https://github.com/qwpp7g79y4-maker/symlog`.
 
 Of vanuit een lokale checkout: `cargo install --path .`
 

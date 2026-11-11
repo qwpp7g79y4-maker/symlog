@@ -1,14 +1,9 @@
 # symlog
 
-[![crates.io](https://img.shields.io/crates/v/symlog.svg)](https://crates.io/crates/symlog)
-
 A terminal log viewer for Symfony/Monolog logs, with vim-like keys. `symlog` reads
 a log file only (read-only), runs entirely locally, and makes no network requests.
 
-> **Status:** 1.0.0 is release-ready and not yet published. The last version
-> published on [crates.io](https://crates.io/crates/symlog) is 0.1.1. This README
-> describes exactly what the current binary does; see
-> [Open items](#open-items) for what is deliberately still missing.
+[![crates.io](https://img.shields.io/crates/v/symlog.svg)](https://crates.io/crates/symlog) [![downloads](https://img.shields.io/crates/d/symlog.svg)](https://crates.io/crates/symlog) [![CI](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml/badge.svg)](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml) [![PEPAI checked](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqwpp7g79y4-maker%2Fsymlog%2Fmain%2F.github%2Fbadge.json)](QUALITY.md) [![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-blue.svg)](https://github.com/qwpp7g79y4-maker/symlog/blob/main/Cargo.toml) [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
 
 Nederlandse versie: [README.nl.md](README.nl.md). The help text and a few lines the binary
 prints are Dutch (`wacht op <pad>...`, `— geroteerd —`, `— afgekapt —`).
@@ -49,12 +44,18 @@ prints are Dutch (`wacht op <pad>...`, `— geroteerd —`, `— afgekapt —`).
 
 ## Installation
 
+Version 1.0.0 is on [crates.io](https://crates.io/crates/symlog). With Rust 1.88 or newer:
+
 ```sh
 cargo install symlog
-cargo install --git https://github.com/qwpp7g79y4-maker/symlog
+symlog --help
 ```
 
-Or from a local checkout: `cargo install --path .`
+`cargo install --locked symlog` pins the crate's lockfile.
+
+For the latest `main`: `cargo install --locked --git https://github.com/qwpp7g79y4-maker/symlog`.
+
+From a local checkout: `cargo install --path .`
 
 ## Aan de slag in 5 minuten
 

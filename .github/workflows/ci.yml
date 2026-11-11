@@ -2,7 +2,7 @@ name: ci
 
 on:
   push:
-    branches: [main]
+    branches: [main, release/v1.0.0]
   pull_request:
 
 env:
@@ -57,9 +57,14 @@ jobs:
       - run: |
           patterns=$(mktemp)
           grep -vE '^(#|[[:space:]]*$)' docs/forbidden-words.txt > "$patterns"
-          if git ls-files -z \
-              | grep -zv '^docs/forbidden-words\.txt$' \
-              | xargs -0 grep -niE -f "$patterns" --; then
+          # badge.json carries the public mark. The same mark is the alt text on the
+          # shields row, so that one line is not a name leak.
+          hits=$(git ls-files -z \
+              | grep -zvE '^(docs/forbidden-words\.txt|\.github/badge\.json)$' \
+              | xargs -0 grep -niE -f "$patterns" -- \
+              | grep -v 'img.shields.io/endpoint' || true)
+          if [ -n "$hits" ]; then
+            printf '%s\n' "$hits"
             echo "Verboden woord gevonden (zie hierboven); verwijder het uit het publieke bestand."
             exit 1
           fi

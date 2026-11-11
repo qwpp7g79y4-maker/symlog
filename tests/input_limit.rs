@@ -1,5 +1,5 @@
 //! Eén byte boven de gedocumenteerde invoerlimiet is exit 2.
-//! Het bestand is sparse, staat in `/tmp`, en wordt aan het einde verwijderd.
+//! Het bestand is sparse, staat in de systeem-tijdelijke map, en wordt aan het einde verwijderd.
 //! Het is geen bestand in de repository.
 
 use std::time::Duration;
@@ -17,11 +17,11 @@ fn log_over_the_byte_limit_exits_2() {
             let _ = std::fs::remove_file(&self.0);
         }
     }
-    let path = Gone(std::path::PathBuf::from(format!(
-        "/tmp/symlog-w46-over-limit-{}.log",
-        std::process::id()
-    )));
-    let file = std::fs::File::create(&path.0).expect("create over-limit file in /tmp");
+    let path = Gone(
+        std::env::temp_dir().join(format!("symlog-w46-over-limit-{}.log", std::process::id())),
+    );
+    let file =
+        std::fs::File::create(&path.0).expect("create over-limit file in the temp directory");
     file.set_len(LIMIT + 1)
         .expect("sparse length one byte over the limit");
     drop(file);
