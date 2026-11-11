@@ -13,7 +13,7 @@ license = "MIT OR Apache-2.0"
 description = "Terminal-logviewer voor Symfony/Monolog-logs, met vim-toetsen."
 repository = "https://github.com/qwpp7g79y4-maker/symlog"
 readme = "README.md"
-exclude = [".github/", "blueprint.md", "task.md"]
+exclude = [".github/", "blueprint.md", "task.md", "docs/forbidden-words.txt"]
 
 [lib]
 name = "symlog"
