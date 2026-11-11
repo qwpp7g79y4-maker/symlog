@@ -39,7 +39,7 @@ symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [-
 symlog --completions <bash|zsh>
 ```
 
-`<PATH>` is verplicht; er is geen automatisch `var/log/...`-pad en geen stdin (`-`).
+`<PATH>` is verplicht; er is geen automatisch `var/log/...`-pad. `-` leest stdin in één doorgang en schrijft elk record plain uit zodra het compleet is. `--follow` of `--tui` samen met `-` is een gebruiksfout (exit 2).
 
 ## Voorbeeld
 

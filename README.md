@@ -80,8 +80,9 @@ symlog [PATH] [-f|--follow] [--level LEVEL] [--channel CHANNELS]... [--plain] [-
 symlog --completions <bash|zsh>
 ```
 
-`<PATH>` is required; there is no automatic `var/log/...` default and no stdin
-support (`-`) in this version.
+`<PATH>` is required; there is no automatic `var/log/...` default. `-` reads stdin
+in one pass and writes each record as plain text when the record is complete.
+`--follow` and `--tui` with `-` are a usage error (exit 2).
 
 ## Example
 
@@ -203,8 +204,8 @@ replaces these values with `***`:
 
 ## What it does not do
 
-- No log collection, no server, no network; only a local file at PATH.
-- No stdin input (`-`) in this version.
+- No log collection, no server, no network; only a local file at PATH, or `-` for stdin.
+- Stdin (`-`) is one-pass plain output. `--follow` and `--tui` with `-` are a usage error (exit 2).
 - Never writes, rotates or truncates the log file itself. `--output PATH` writes the plain output to that other path. A one-shot run replaces an existing file there only after the new report is complete. SIGINT exits 130 and leaves the previous file in place. A missing parent directory is not created.
 - No custom `LineFormatter` format strings; such lines are shown as raw lines.
 - No pretty-printed (multi-line) JSON records.
