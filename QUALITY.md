@@ -11,6 +11,8 @@ pep: 3.5
 
 Score: 10 − 3 − 3.5 = 3.5. Other open points in this file have no class and do not count. They are not repaired yet.
 
+Update 2026-11-26: THIRD-PARTY-LICENSES.html with the README link, and the authors field in Cargo.toml, are added (branch fix/license-and-authors). The score above stays as it was set and is not recalculated in this change.
+
 Gates for this branch, measured with `cargo test --no-fail-fast`,
 `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`:
 

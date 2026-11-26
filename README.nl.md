@@ -133,3 +133,5 @@ Na een release staat de tool in sluimermodus (dormant): een nieuwe versie komt e
 ## Licentie
 
 `MIT OR Apache-2.0`, zie `LICENSE-MIT` en `LICENSE-APACHE`.
+
+De licenties van de externe crates in het programma staan in [THIRD-PARTY-LICENSES.html](THIRD-PARTY-LICENSES.html).

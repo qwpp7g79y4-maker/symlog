@@ -1,6 +1,7 @@
 [package]
 name = "symlog"
 version = "1.0.0"
+authors = ["PEPAI <pep_ai@icloud.com>"]
 edition = "2021"
 # Opgehoogd in T2: `lru` vanaf de ondergrens die deny.toml eist (>=0.18.2, zie T1)
 # vereist zelf rustc 1.85.0. Opgehoogd in T8: `ratatui` 0.29 bracht intern `lru 0.12`
@@ -13,7 +14,7 @@ license = "MIT OR Apache-2.0"
 description = "Terminal log viewer for Symfony/Monolog logs, with vim-like keys."
 repository = "https://github.com/qwpp7g79y4-maker/symlog"
 readme = "README.md"
-exclude = [".github/", "blueprint.md", "task.md", "docs/forbidden-words.txt", "*-plugin/"]
+exclude = [".github/", "blueprint.md", "task.md", "docs/forbidden-words.txt", "docs/allowed-lines.txt", "*-plugin/"]
 
 [lib]
 name = "symlog"

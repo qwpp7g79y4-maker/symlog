@@ -60,12 +60,15 @@ jobs:
           # The plugin bundle carries the author name in its manifest.
           skip_dir="symlog-plugin/"
           # badge.json carries the public mark. The same mark is the alt text on the
-          # shields row, so that one line is not a name leak.
+          # shields row, so that one line is not a name leak. The package author line
+          # in Cargo.toml is the same public mark: docs/allowed-lines.txt lists that
+          # exact line, and only lines that match it in full are let through.
           hits=$(git ls-files -z \
-              | grep -zvE '^(docs/forbidden-words\.txt|\.github/badge\.json)$' \
+              | grep -zvE '^(docs/forbidden-words\.txt|docs/allowed-lines\.txt|\.github/badge\.json)$' \
               | grep -zv "^${skip_dir}" \
               | xargs -0 grep -niE -f "$patterns" -- \
-              | grep -v 'img.shields.io/endpoint' || true)
+              | grep -v 'img.shields.io/endpoint' \
+              | grep -vxE -f docs/allowed-lines.txt || true)
           if [ -n "$hits" ]; then
             printf '%s\n' "$hits"
             echo "Verboden woord gevonden (zie hierboven); verwijder het uit het publieke bestand."
