@@ -1,6 +1,15 @@
 # Quality
 
-pep: 10
+pep: 3.5
+
+## Open points that count
+
+| Point | Class | Deduction |
+|---|---|---|
+| No THIRD-PARTY-LICENSES.html page and no link to it | S | 3 |
+| Cargo.toml has no authors field | S- | 3.5 |
+
+Score: 10 − 3 − 3.5 = 3.5. Other open points in this file have no class and do not count. They are not repaired yet.
 
 Gates for this branch, measured with `cargo test --no-fail-fast`,
 `cargo clippy --all-targets -- -D warnings` and `cargo fmt --check`:

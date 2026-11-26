@@ -39,7 +39,7 @@ Options:
 
 `<PATH>` is required. There is no default `var/log/...` path and no stdin support (`-`) in this version.
 
-When Claude should read the log as text, always pass `--plain` (and `--no-color` if you want plain text without ANSI codes). Do not pass `--tui` unless the user is at an interactive terminal and asked for the TUI. `--tui` without a tty on stdout exits 3.
+When the assistant should read the log as text, always pass `--plain` (and `--no-color` if you want plain text without ANSI codes). Do not pass `--tui` unless the user is at an interactive terminal and asked for the TUI. `--tui` without a tty on stdout exits 3.
 
 ## Examples from the project README
 
