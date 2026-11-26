@@ -24,7 +24,7 @@
   rusage`-layout maar **nog niet op echte macOS-hardware gedraaid** — door de eigenaar
   te bevestigen zodra de `bench-mem`-CI-job op `macos-latest` draait.
 - Machine (deze meting, niet CI-hardware): AMD Ryzen 9 5950X (16C/32T), 125 GiB RAM,
-  Linux 6.17 (pop-os), release-build (`cargo build --release`, `rustc 1.99.0`).
+  Linux 6.17 (testmachine), release-build (`cargo build --release`, `rustc 1.99.0`).
 
 ## Resultaten: 2 GiB-fixture, release
 

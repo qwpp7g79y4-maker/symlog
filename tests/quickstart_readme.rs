@@ -8,8 +8,13 @@ use std::path::Path;
 fn quickstart_commands(readme: &str) -> Vec<String> {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
     let text = std::fs::read_to_string(root.join(readme)).unwrap();
+    let heading = if readme.ends_with(".nl.md") {
+        "## Aan de slag in 5 minuten"
+    } else {
+        "## Quickstart in 5 minutes"
+    };
     let section = text
-        .split("## Aan de slag in 5 minuten")
+        .split(heading)
         .nth(1)
         .unwrap_or_else(|| panic!("{readme}: section missing"));
     let section = section.split("\n## ").next().unwrap();
