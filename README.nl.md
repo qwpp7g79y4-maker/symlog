@@ -5,7 +5,7 @@ Nederlandse versie van [README.md](README.md) (Engels, volledig).
 Een terminal-logviewer voor Symfony/Monolog-logs, met vim-toetsen. `symlog` leest een
 logbestand alleen (read-only), draait volledig lokaal en doet geen netwerkverzoeken.
 
-[![crates.io](https://img.shields.io/crates/v/symlog.svg)](https://crates.io/crates/symlog) [![downloads](https://img.shields.io/crates/d/symlog.svg)](https://crates.io/crates/symlog) [![CI](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml/badge.svg)](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml) [![PEPAI gecontroleerd](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqwpp7g79y4-maker%2Fsymlog%2Fmain%2F.github%2Fbadge.json)](QUALITY.md) [![MSRV 1.88](https://img.shields.io/badge/MSRV-1.88-blue.svg)](https://github.com/qwpp7g79y4-maker/symlog/blob/main/Cargo.toml) [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#licentie)
+[![crates.io](https://img.shields.io/crates/v/symlog.svg)](https://crates.io/crates/symlog) [![downloads](https://img.shields.io/crates/d/symlog.svg)](https://crates.io/crates/symlog) [![CI](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml/badge.svg)](https://github.com/qwpp7g79y4-maker/symlog/actions/workflows/ci.yml) [![PEPAI checked](https://img.shields.io/endpoint?url=https%3A%2F%2Fraw.githubusercontent.com%2Fqwpp7g79y4-maker%2Fsymlog%2Fmain%2F.github%2Fbadge.json)](QUALITY.md) [![MSRV 1.85](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://github.com/qwpp7g79y4-maker/symlog/blob/main/Cargo.toml) [![License: MIT OR Apache-2.0](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](https://github.com/qwpp7g79y4-maker/symlog#license)
 
 ## Installatie
 
@@ -125,6 +125,10 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 462 geslaagde tests, 0 gefaald, 1 genegeerd (`cargo test --no-fail-fast`), gemeten op
 deze versiewijziging (ouder `ae22844`) op linux x86_64. `tests/sigint.rs` wordt alleen
 op dat doel gebouwd. Zie `QUALITY.md`.
+
+## Onderhoud
+
+Na een release staat de tool in sluimermodus (dormant): een nieuwe versie komt er alleen bij een gemelde bug, een verzoek of een beveiligingsprobleem. Beveiliging gaat altijd voor.
 
 ## Licentie
 

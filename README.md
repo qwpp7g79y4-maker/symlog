@@ -289,6 +289,10 @@ cargo package --allow-dirty
 The `bench-mem` CI job runs the performance measurement from `docs/perf.md`; see
 that file for the current numbers and the performance targets they are measured against.
 
+## Maintenance
+
+After a release the tool is dormant: a new version appears only for a reported bug, a request, or a security problem. Security always comes first.
+
 ## License
 
 `MIT OR Apache-2.0`, see `LICENSE-MIT` and `LICENSE-APACHE`.
