@@ -57,9 +57,8 @@ jobs:
       - run: |
           patterns=$(mktemp)
           grep -vE '^(#|[[:space:]]*$)' docs/forbidden-words.txt > "$patterns"
-          # Plugin-bundle path is assembled so this workflow file is not itself flagged.
-          skip_dir="cla"
-          skip_dir="${skip_dir}ude-plugin/"
+          # The plugin bundle carries the author name in its manifest.
+          skip_dir="symlog-plugin/"
           # badge.json carries the public mark. The same mark is the alt text on the
           # shields row, so that one line is not a name leak.
           hits=$(git ls-files -z \
