@@ -57,7 +57,7 @@ For the latest `main`: `cargo install --locked --git https://github.com/qwpp7g79
 
 From a local checkout: `cargo install --path .`
 
-## Aan de slag in 5 minuten
+## Quickstart in 5 minutes
 
 Run these from a checkout of this repository (they use the fixtures in `tests/fixtures`;
 no system logs, no network, no TUI). `tests/quickstart_readme.rs` runs every `symlog`
@@ -288,6 +288,10 @@ cargo package --allow-dirty
 
 The `bench-mem` CI job runs the performance measurement from `docs/perf.md`; see
 that file for the current numbers and the performance targets they are measured against.
+
+## Maintenance
+
+After a release the tool is dormant: a new version appears only for a reported bug, a request, or a security problem. Security always comes first.
 
 ## License
 

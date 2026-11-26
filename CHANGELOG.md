@@ -4,8 +4,6 @@ Alle noemenswaardige wijzigingen in dit project staan in dit bestand. Het formaa
 gebaseerd op [Keep a Changelog](https://keepachangelog.com/); dit project volgt
 Semantic Versioning vanaf 1.0.0.
 
-## [Unreleased]
-
 ## [1.0.0] - 2026-11-09
 
 De opvolger van 0.1.1.

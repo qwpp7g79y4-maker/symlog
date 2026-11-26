@@ -126,6 +126,10 @@ Exacte lijst uit `symlog --help` (zie `tests/golden/help.txt`):
 deze versiewijziging (ouder `ae22844`) op linux x86_64. `tests/sigint.rs` wordt alleen
 op dat doel gebouwd. Zie `QUALITY.md`.
 
+## Onderhoud
+
+Na een release staat de tool in sluimermodus (dormant): een nieuwe versie komt er alleen bij een gemelde bug, een verzoek of een beveiligingsprobleem. Beveiliging gaat altijd voor.
+
 ## Licentie
 
 `MIT OR Apache-2.0`, zie `LICENSE-MIT` en `LICENSE-APACHE`.

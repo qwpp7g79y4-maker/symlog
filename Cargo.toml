@@ -10,10 +10,10 @@ edition = "2021"
 # toevoegt die een hogere MSRV eist") bedoelde.
 rust-version = "1.88"
 license = "MIT OR Apache-2.0"
-description = "Terminal-logviewer voor Symfony/Monolog-logs, met vim-toetsen."
+description = "Terminal log viewer for Symfony/Monolog logs, with vim-like keys."
 repository = "https://github.com/qwpp7g79y4-maker/symlog"
 readme = "README.md"
-exclude = [".github/", "blueprint.md", "task.md", "docs/forbidden-words.txt"]
+exclude = [".github/", "blueprint.md", "task.md", "docs/forbidden-words.txt", "*-plugin/"]
 
 [lib]
 name = "symlog"
